@@ -57,6 +57,14 @@ bool mc100_path_valid(const char *p) {
     return false;
   while (*q >= '0' && *q <= '9')
     ++q;
+  if (!strncmp(q, ".recovering_", 12)) {
+    q += 12;
+    if (*q < '0' || *q > '9')
+      return false;
+    while (*q >= '0' && *q <= '9')
+      ++q;
+    return !strcmp(q, ".wav.part");
+  }
   return !strcmp(q, ".wav.part") || !strcmp(q, ".idx.part") ||
          !strcmp(q, ".wav") || !strcmp(q, ".idx") ||
          !strcmp(q, ".partial.wav") || !strcmp(q, ".recovered.wav");
