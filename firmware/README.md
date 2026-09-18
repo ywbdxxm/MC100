@@ -1,8 +1,11 @@
-# MC100 firmware infrastructure
+# MC100 firmware USB recording bench
 
-This is the T01 boardless baseline, not a recorder. The application prints
-`MC100 infrastructure only / recording not implemented` once, then blocks.
-It does not enter LISTEN, initialize audio/SD/radio, or restart on a countdown.
+This is a manual `EVT_USB_BENCH` recording slice using the portable audio and
+storage components. It supports microphone capture, two-second prerecord,
+bounded buffering, WAV/index writing and five-minute rotation. It does not yet
+provide automatic LISTEN/VAD, startup recovery or product battery safety.
+The bench explicitly requires USB power with no battery; it never automatically
+starts recording. See the [actual test report](../docs/reports/2026-09-19-evt-recording.md).
 
 ## Identity and environment checks
 
@@ -65,13 +68,44 @@ Unknown profiles fail; `release` is unavailable. `-Profile host` runs host tests
 
 `sdkconfig.defaults` and `partitions.csv` are versioned policy. ESP-IDF v6.1 has a
 hidden `ESP_WIFI_ENABLED` SoC default: assigning it `n` does not disable Wi-Fi.
-Instead MINIMAL_BUILD and explicit dependencies omit `esp_wifi`, `bt` and `esp_psram`;
-the script checks this actual graph. Their unloaded Kconfig symbols are not assigned.
+Instead MINIMAL_BUILD and explicit dependencies omit `esp_wifi` and `bt`.
+The SD dependency graph includes the SDK's sole MSPI shim, but PSRAM support remains
+disabled; the build script verifies that exact source exception and configuration.
+
+FAT32 and exFAT use the same locked SDK FatFs. A project-local compiler overlay
+enables exFAT consistently for the library and every consumer without editing the
+SDK. ABI/config assertions fail closed if this assumption changes. Recording files
+remain bounded below 10 MB; this is not unrestricted large-file VFS support.
+
+## Authorized COM7 bench commands
+
+Use the selected IDF Python environment, which supplies pyserial. The client is
+deliberately fixed to COM7 and never enumerates or falls back to another port.
+Only use it when this port is explicitly assigned to MC100. Build-generated
+`flash_args` define the firmware addresses; back up the existing Flash before the
+first overwrite. Flashing is not performed by these client commands.
+
+```text
+python firmware/tools/mc100_com7.py status
+python firmware/tools/mc100_com7.py capture 3
+python firmware/tools/mc100_com7.py record 3
+python firmware/tools/mc100_com7.py list
+python firmware/tools/mc100_com7.py download <final-filename> firmware/out/<new-local-file>
+python firmware/tools/verify_recording.py <local.wav> <local.idx>
+```
+
+`capture` accepts 3–60 seconds and performs no SD I/O. `record` accepts 3–600
+seconds including the first two seconds of real captured prerecord. The client
+uses a nonce synchronization barrier, bounded replies and per-transfer CRC.
+Downloads require new local paths under `firmware/out`; recordings and raw logs
+are private test artifacts and must not be uploaded. Firmware never formats,
+deletes or overwrites existing card files. Unsupported media prevents recording
+but still allows capture-only diagnostics.
 
 ## Limits
 
-The host test checks fixed board pin/capability and RAM-layout contracts; compilation
-does not prove wiring or peripheral behavior. Target boot, Flash identity, USB operation,
-PDM/SD/ADC/LED, current draw, memory/stack high-water marks, recording and all HIL gates
-are NOT_RUN. Nothing here constitutes release readiness. Do not flash or infer a serial
-port from this boardless baseline.
+Host tests cover core formats, state, queues, write transactions, protocol and
+independent file validation. Compilation alone does not prove peripheral behavior.
+Board observations are recorded separately; untested acoustic accuracy, battery
+calibration, true power-loss recovery and long-run durability remain unqualified.
+The `release` profile is intentionally unavailable.

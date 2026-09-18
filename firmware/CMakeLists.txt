@@ -8,3 +8,4 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 # an explicit dependency graph are the effective exclusion mechanism.
 idf_build_set_property(MINIMAL_BUILD ON)
 project(mc100)
+include(cmake/mc100-fatfs-exfat.cmake)

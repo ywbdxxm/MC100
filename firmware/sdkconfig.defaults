@@ -1,8 +1,9 @@
 CONFIG_IDF_TARGET="esp32s3"
 CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
 CONFIG_ESPTOOLPY_FLASHSIZE="8MB"
-# PSRAM and Bluetooth are excluded by the minimal component dependency graph.
-# Their Kconfig menus are not loaded: do not assign absent SPIRAM/BT symbols.
+# No external RAM on MINI-1-N8; SD driver may include the SDK MSPI shim.
+# CONFIG_SPIRAM is not set
+# Bluetooth is excluded by the minimal component dependency graph.
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_80=y
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=80
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
@@ -13,3 +14,10 @@ CONFIG_ESP_BROWNOUT_DET=y
 CONFIG_ESP_INT_WDT=y
 CONFIG_ESP_TASK_WDT_EN=y
 CONFIG_ESP_TASK_WDT_INIT=y
+CONFIG_FATFS_LFN_STACK=y
+CONFIG_FATFS_MAX_LFN=128
+CONFIG_FATFS_FS_LOCK=9
+CONFIG_FATFS_PER_FILE_CACHE=y
+# CONFIG_FATFS_USE_DYN_BUFFERS is not set
+# SD-only FatFs uses 512-byte sectors; avoid a 4 KiB cache in every FIL.
+CONFIG_WL_SECTOR_SIZE_512=y

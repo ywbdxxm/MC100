@@ -1,0 +1,12 @@
+menu "MC100 V1 platform"
+    config MC100_PDM_RIGHT_SLOT
+        bool "EVT: use right PDM slot instead of initial left candidate"
+        default n
+        help
+            SELECT is grounded; the effective slot remains an H02 measurement.
+    config MC100_SD_CD_ACTIVE_HIGH
+        bool "EVT: SD card detect active high"
+        default n
+        help
+            Low-active is the unverified H01 candidate. This does not change wiring.
+endmenu

@@ -12,7 +12,7 @@ if ($Profile -eq 'host') {
     & (Join-Path $PSScriptRoot 'test-host.ps1') -Clean:$Clean
     return
 }
-if ($Profile -eq 'release') { throw 'Release is not available: infrastructure only, recording and hardware validation are not implemented.' }
+if ($Profile -eq 'release') { throw 'Release is not available: USB bench only; automatic VAD, recovery and full hardware qualification are not complete.' }
 
 $outputRoot = [IO.Path]::GetFullPath((Join-Path $firmwareRoot 'out'))
 $buildDirectory = [IO.Path]::GetFullPath((Join-Path $firmwareRoot $OutputDirectory))
@@ -89,8 +89,18 @@ if ($config.ESPTOOLPY_FLASHSIZE -ne '8MB' -or $config.SPIRAM -or $config.ESP_DEF
     $config.BT_ENABLED -or -not $config.PARTITION_TABLE_CUSTOM -or $config.PARTITION_TABLE_CUSTOM_FILENAME -ne 'partitions.csv') {
     throw 'Resolved configuration violates the MC100 infrastructure baseline.'
 }
-foreach ($component in @('esp_wifi', 'bt', 'esp_psram')) {
+foreach ($component in @('esp_wifi', 'bt')) {
     if ($description.build_components -contains $component) { throw "Excluded component linked: $component" }
+}
+# FatFs -> SDSPI -> SPI has an unconditional private esp_psram dependency in
+# this SDK. With CONFIG_SPIRAM=n only the MSPI shim compiles, not PSRAM support.
+# Keep checking exact sources so an enabled PSRAM implementation cannot slip in.
+if ($description.build_components -contains 'esp_psram') {
+    $psramSources = @($description.build_component_info.esp_psram.sources)
+    if ($config.SPIRAM -or $psramSources.Count -ne 1 -or
+        [IO.Path]::GetFileName($psramSources[0]) -ne 'esp_psram_mspi.c') {
+        throw 'PSRAM implementation must remain disabled for MC100 N8.'
+    }
 }
 $partitionCsv = & $python (Join-Path $idfRoot 'components/partition_table/gen_esp32part.py') (Join-Path $buildDirectory 'partition_table/partition-table.bin')
 if ($LASTEXITCODE -ne 0) { throw 'Generated partition table verification failed.' }
@@ -101,4 +111,4 @@ if ($partitions.Count -ne 3 -or
     $partitions[2].Name -ne 'factory' -or $partitions[2].Type -ne 'app' -or $partitions[2].SubType -ne 'factory' -or $partitions[2].Offset -ne '0x10000' -or $partitions[2].Size -ne '3M') {
     throw 'Generated partition table violates the MC100 layout.'
 }
-Write-Host 'MC100 infrastructure build verified; recording and all hardware tests remain NOT_RUN.'
+Write-Host 'MC100 target build verified; physical validation is recorded separately from compilation.'

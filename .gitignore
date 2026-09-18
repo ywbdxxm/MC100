@@ -10,6 +10,8 @@ Desktop.ini
 # ESP-IDF generated output
 /firmware/build/
 /firmware/out/
+/firmware/.cache/
+/firmware/**/__pycache__/
 /firmware/sdkconfig
 /firmware/sdkconfig.old
 
