@@ -61,3 +61,16 @@ add_test(NAME wave_interop COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/../tests/test_wave_interop.py
     $<TARGET_FILE:emit_format_fixture>
 )
+
+add_library(mc100_core STATIC
+    ../components/mc100_core/state.c
+    ../components/mc100_core/battery_policy.c
+)
+target_include_directories(mc100_core PUBLIC ../components/mc100_core/include)
+mc100_host_checks(mc100_core)
+foreach(name state battery_policy)
+    add_executable(test_${name} ../tests/test_${name}.c)
+    target_link_libraries(test_${name} PRIVATE mc100_core)
+    mc100_host_checks(test_${name})
+    add_test(NAME ${name} COMMAND test_${name})
+endforeach()
