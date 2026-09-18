@@ -5,7 +5,7 @@
 typedef struct {
     mc100_generation_t generation;
     uint64_t first, cutoff, operation_since, stop_since;
-    bool used, opening, opened, closing, stop_wait, stopped, cutoff_valid;
+    bool used, opening, opened, closing, stop_wait, stopped, cutoff_valid, canceled_grant;
 } session_t;
 
 struct mc100_state {
@@ -15,6 +15,7 @@ struct mc100_state {
     uint64_t now, arm_since, minimum_first, hold_since, low_since;
     bool have_time, arm_wait, armed, minimum_valid;
     bool hold_wait, no_writes, low_budget, quiesced;
+    mc100_fault_reason_t first_fault;
 };
 typedef struct { mc100_action_t action[8]; size_t count; bool full; } output_t;
 
@@ -33,23 +34,47 @@ static mc100_generation_t token(mc100_state_t *s)
     return ++s->serial;
 }
 
+static void stop(mc100_state_t *s, session_t *c, output_t *o);
+
+/* A grant can already own a frozen bank even when its TRIGGER is still queued.
+ * Move it into the existing spare context before revoking admission. */
+static void retain_grant(mc100_state_t *s)
+{
+    if (s->grant) {
+        s->pending.used = true;
+        s->pending.canceled_grant = true;
+        s->pending.generation = s->grant;
+        s->grant = 0;
+    }
+    s->arm_wait = s->armed = false;
+}
+
 static void hold(mc100_state_t *s, output_t *o, mc100_hold_reason_t reason)
 {
     s->hold_wait = true;
     s->hold_since = s->now;
     s->hold_token = token(s);
-    s->grant = 0;
-    s->arm_wait = s->armed = false;
+    retain_grant(s);
     emit(o, MC100_ACT_HOLD, s->hold_token, 0, (uint32_t)reason, false);
 }
 
 static void fault(mc100_state_t *s, output_t *o, mc100_fault_reason_t reason)
 {
-    if (s->state == MC100_FAULT) return;
+    bool safe_prefix = reason == MC100_FAULT_MIC_IO ||
+        reason == MC100_FAULT_QUEUE_OVERFLOW || reason == MC100_FAULT_STORAGE_FULL;
+    if (!s->first_fault) {
+        s->first_fault = reason;
+        emit(o, MC100_ACT_REPORT_FAULT, s->current.generation, 0, (uint32_t)reason, false);
+    }
     s->state = MC100_FAULT;
-    s->no_writes = true;
-    s->low_budget = false;
-    emit(o, MC100_ACT_REPORT_FAULT, s->current.generation, 0, (uint32_t)reason, false);
+    if (s->no_writes) return;
+    retain_grant(s);
+    if (safe_prefix) {
+        stop(s, &s->current, o);
+        stop(s, &s->pending, o);
+        return;
+    }
+    s->no_writes = true; s->low_budget = false;
     /* Preserve both contexts until owners acknowledge they no longer refer to
      * them. Token 0 is reserved for emergency quiescence at serial exhaustion. */
     hold(s, o, MC100_HOLD_FAULT_NO_WRITES);
@@ -94,7 +119,7 @@ static bool check_timeout(mc100_state_t *s, output_t *o)
 {
     const session_t *c[2] = { &s->current, &s->pending };
     size_t i;
-    if (s->state == MC100_FAULT || s->state == MC100_LOW_BAT_HOLD) return false;
+    if ((s->state == MC100_FAULT && s->no_writes) || s->state == MC100_LOW_BAT_HOLD) return false;
     if ((s->arm_wait && expired(s->now, s->arm_since, MC100_CONTROL_TIMEOUT_MS)) ||
         (s->hold_wait && expired(s->now, s->hold_since, MC100_CONTROL_TIMEOUT_MS))) {
         fault(s, o, MC100_FAULT_CONTROL_TIMEOUT); return true;
@@ -119,13 +144,15 @@ static bool check_timeout(mc100_state_t *s, output_t *o)
 static void advance(mc100_state_t *s, output_t *o)
 {
     session_t *c = &s->current;
-    if (s->no_writes || s->hold_wait || s->state == MC100_FAULT) return;
-    if (s->state == MC100_LOW_BAT && s->pending.used && s->pending.stopped)
+    bool finalizing = s->state == MC100_LOW_BAT || s->state == MC100_FAULT;
+    if (s->no_writes || s->hold_wait) return;
+    if (finalizing && s->pending.used && s->pending.stopped)
         release(&s->pending, o);
     if (c->used && c->opened && c->stopped && !c->closing) {
         c->closing = true;
         c->operation_since = s->now;
-        emit(o, MC100_ACT_CLOSE_THROUGH, c->generation, c->cutoff, 0, c->cutoff_valid);
+        emit(o, MC100_ACT_CLOSE_THROUGH, c->generation, c->cutoff,
+            s->state == MC100_FAULT ? (uint32_t)s->first_fault : 0, c->cutoff_valid);
         if (c->cutoff_valid) {
             if (c->cutoff == UINT64_MAX) {
                 fault(s, o, MC100_FAULT_INTERNAL_PROTOCOL); return;
@@ -135,9 +162,12 @@ static void advance(mc100_state_t *s, output_t *o)
         }
         if (s->state == MC100_RECORD && !s->pending.used && !s->grant) arm(s, o);
     }
-    if (s->state == MC100_LOW_BAT && !c->used && !s->pending.used) {
+    if (finalizing && !c->used && !s->pending.used) {
         s->low_budget = false;
-        hold(s, o, MC100_HOLD_LOW);
+        if (s->state == MC100_FAULT) {
+            s->no_writes = true;
+            hold(s, o, MC100_HOLD_FAULT_NO_WRITES);
+        } else hold(s, o, MC100_HOLD_LOW);
     }
 }
 
@@ -169,10 +199,12 @@ static void handle(mc100_state_t *s, const mc100_event_t *e, output_t *o)
         if (s->pending.used || (s->current.used && !s->current.closing)) {
             fault(s, o, MC100_FAULT_INTERNAL_PROTOCOL); break;
         }
+        if (s->minimum_valid && e->seq < s->minimum_first) {
+            fault(s, o, MC100_FAULT_INTERNAL_PROTOCOL); break;
+        }
         c = s->current.used ? &s->pending : &s->current;
         memset(c, 0, sizeof(*c));
         c->used = true; c->generation = e->generation; c->first = e->seq;
-        if (s->minimum_valid && c->first < s->minimum_first) c->first = s->minimum_first;
         s->grant = 0; s->armed = false; s->state = MC100_RECORD;
         if (c == &s->current) open_current(s, o);
         break;
@@ -188,7 +220,7 @@ static void handle(mc100_state_t *s, const mc100_event_t *e, output_t *o)
         if (c && c->stop_wait && !s->no_writes) {
             c->stop_wait = false; c->stopped = true;
             c->cutoff = e->seq; c->cutoff_valid = e->seq_valid;
-            if (e->seq_valid && e->seq < c->first)
+            if (!c->canceled_grant && e->seq_valid && e->seq < c->first)
                 fault(s, o, MC100_FAULT_INTERNAL_PROTOCOL);
         }
         break;
@@ -207,13 +239,14 @@ static void handle(mc100_state_t *s, const mc100_event_t *e, output_t *o)
         if (s->state == MC100_LOW_BAT || s->state == MC100_LOW_BAT_HOLD ||
             s->state == MC100_FAULT) break;
         s->state = MC100_LOW_BAT;
-        s->grant = 0; s->armed = s->arm_wait = false;
+        retain_grant(s);
         s->low_budget = true; s->low_since = s->now;
         stop(s, &s->current, o); stop(s, &s->pending, o);
         break;
     case MC100_EV_CRITICAL:
-        if (s->state == MC100_LOW_BAT_HOLD || s->state == MC100_FAULT || s->no_writes) break;
-        s->state = MC100_LOW_BAT; s->no_writes = true; s->low_budget = false;
+        if (s->state == MC100_LOW_BAT_HOLD || s->no_writes) break;
+        if (s->state != MC100_FAULT) s->state = MC100_LOW_BAT;
+        s->no_writes = true; s->low_budget = false;
         s->current.stop_wait = s->pending.stop_wait = false;
         s->current.opening = s->current.closing = false;
         hold(s, o, MC100_HOLD_CRITICAL_NO_WRITES);

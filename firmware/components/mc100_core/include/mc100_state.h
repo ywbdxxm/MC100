@@ -54,16 +54,33 @@ enum { MC100_STATE_ACTION_CAPACITY = 8, MC100_CONTROL_TIMEOUT_MS = 200,
  * ARM.detail preauthorizes the 750-frame silence stop. ARM.seq (when valid) is
  * the minimum first sequence. ARMED must precede TRIGGER for the granted token.
  * TRIGGER.seq is the snapshot first sequence, not the VAD trigger sequence.
+ * A snapshot below ARM's minimum is INTERNAL_PROTOCOL, never silently clamped.
  * CAPTURE_STOPPED.seq_valid=false means no accepted data, including seq 0.
  * CLOSE_THROUGH preserves that flag. The closing generation's valid queue must
  * remain drainable until CLOSED. A canceled pending generation may be discarded
  * only on its RELEASE, without removing packets belonging to the older session.
+ * LOW and safe-prefix faults cancel every outstanding ARM, including one not yet
+ * ARMED or whose TRIGGER is queued: STOP_CAPTURE must return CAPTURE_STOPPED for
+ * that token even if no snapshot exists. The token occupies the spare context
+ * until RELEASE; delayed ARMED/TRIGGER cannot readmit it or refresh deadlines.
  * FAULT.global=true explicitly scopes a fault to the device; otherwise its
  * generation must match a current grant/session. Generation 0 is never granted
  * for recording; it is reserved for emergency HOLD if the serial is exhausted.
  * HOLD requests ALL owners quiesce/unmount; HELD with its command token is legal
  * only after no driver or queued action references any session buffer. Critical
- * and fault reasons prohibit new storage writes, including metadata writes.
+ * and FAULT_NO_WRITES HOLD reasons prohibit new storage writes, including
+ * metadata writes; previously queued writes must be suppressed by their owner.
+ * MIC_IO, QUEUE_OVERFLOW and STORAGE_FULL first latch FAULT then finalize the
+ * accepted prefix while storage is healthy. STORAGE_FULL here means exhausted
+ * admission/allocation space, NOT an I/O error: close only within the current
+ * preallocated extent, with no new begin/preallocation. CLOSE_THROUGH.detail is
+ * zero for ordinary close or the first fault reason for .partial.wav + INCIDENT
+ * finalization. Storage must explicitly map this diagnostic enum to its format.
+ * STOP/CLOSE deadlines still apply in FAULT. STORAGE_IO, invalid ADC, CRITICAL,
+ * protocol errors and timeouts prohibit new writes and escalate to owner HOLD.
+ * Escalation never replaces the first REPORT_FAULT reason or declares successful
+ * closure. The old session already closing before a successor fault keeps its
+ * original command/cutoff; the faulty successor is stopped and released.
  * RELEASE follows CLOSED, pending CAPTURE_STOPPED, or all-owner HELD; it never
  * authorizes cross-thread freeing of buffers still referenced by a driver.
  * ACK deadlines use elapsed time, inclusive at 200/1500 ms; duplicates cannot

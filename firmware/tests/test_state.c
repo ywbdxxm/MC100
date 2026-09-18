@@ -253,7 +253,7 @@ static void pending_silence_and_global_fault(void)
     assert(n == 2 && a[0].id == MC100_ACT_REPORT_FAULT && a[1].id == MC100_ACT_HOLD);
     h = a[1].generation;
     event(s, MC100_EV_HELD, h, 0, 14, 0, false);
-    assert(n == 1 && a[0].id == MC100_ACT_RELEASE && a[0].generation == next);
+    assert(n == 2 && a[0].id == MC100_ACT_RELEASE && a[0].generation == next);
     assert(mc100_state_get(s) == MC100_FAULT);
     event(s, MC100_EV_RECOVERED_POWER, 0, 0, 15, 0, false);
     assert(n == 0 && mc100_state_get(s) == MC100_FAULT);
@@ -270,7 +270,7 @@ static void fault_retains_both_contexts_until_quiescent(void)
     next = a[1].generation;
     event(s, MC100_EV_ARMED, next, 0, 6, 0, false);
     event(s, MC100_EV_TRIGGER, next, 11, 7, 0, true);
-    event(s, MC100_EV_FAULT, next, 0, 8, MC100_FAULT_QUEUE_OVERFLOW, false);
+    event(s, MC100_EV_FAULT, next, 0, 8, MC100_FAULT_STORAGE_IO, false);
     assert(n == 2 && a[0].id == MC100_ACT_REPORT_FAULT && a[1].id == MC100_ACT_HOLD);
     h = a[1].generation;
     event(s, MC100_EV_CLOSED, g, 0, 9, 0, false);
@@ -324,8 +324,192 @@ static void deterministic_bounded_replay(void)
         mc100_state_destroy(s[0]); mc100_state_destroy(s[1]);
     }
 }
-int main(void)
+static void safe_fault_prefix(void)
 {
+    const mc100_fault_reason_t reasons[] = { MC100_FAULT_MIC_IO,
+        MC100_FAULT_QUEUE_OVERFLOW, MC100_FAULT_STORAGE_FULL };
+    size_t i;
+    for (i = 0; i < sizeof(reasons) / sizeof(reasons[0]); ++i) {
+        mc100_state_t *s = mc100_state_create();
+        uint64_t g = record(s), h;
+        event(s, MC100_EV_FAULT, g, 0, 4, (uint32_t)reasons[i], false);
+        assert(mc100_state_get(s) == MC100_FAULT);
+        assert(n == 2 && a[0].id == MC100_ACT_REPORT_FAULT && a[0].detail == (uint32_t)reasons[i]);
+        assert(a[1].id == MC100_ACT_STOP_CAPTURE && a[1].generation == g);
+        event(s, MC100_EV_FAULT, g, 0, 5, MC100_FAULT_MIC_IO, false);
+        assert(n == 0); /* First reason and deadlines are immutable. */
+        event(s, MC100_EV_CAPTURE_STOPPED, g, 23, 6, 0, true);
+        assert(n == 1 && a[0].id == MC100_ACT_CLOSE_THROUGH);
+        assert(a[0].seq_valid && a[0].seq == 23 && a[0].detail == (uint32_t)reasons[i]);
+        event(s, MC100_EV_CAPTURE_STOPPED, g, 99, 7, 0, true);
+        assert(n == 0); /* No rewritten cutoff; queued valid prefix still drains. */
+        event(s, MC100_EV_CLOSED, g, 0, 8, 0, false);
+        assert(n == 2 && a[0].id == MC100_ACT_RELEASE && a[1].id == MC100_ACT_HOLD);
+        h = a[1].generation;
+        event(s, MC100_EV_HELD, h, 0, 9, 0, false);
+        assert(n == 0 && mc100_state_get(s) == MC100_FAULT);
+        mc100_state_destroy(s);
+    }
+}
+static void canceled_grant_low_and_fault(void)
+{
+    size_t low, armed, closing;
+    for (low = 0; low < 2; ++low) for (armed = 0; armed < 2; ++armed)
+    for (closing = 0; closing < 2; ++closing) {
+        mc100_state_t *s = mc100_state_create();
+        uint64_t g, old = 0, h;
+        if (closing) {
+            old = record(s);
+            event(s, MC100_EV_SILENCE_END, old, 0, 4, 0, false);
+            event(s, MC100_EV_CAPTURE_STOPPED, old, 100, 5, 0, true);
+            g = a[1].generation;
+        } else g = boot(s, 0);
+        if (armed) event(s, MC100_EV_ARMED, g, 0, 6, 0, false);
+        if (low) event(s, MC100_EV_LOW, 0, 0, 7, 0, false);
+        else event(s, MC100_EV_FAULT, g, 0, 7, MC100_FAULT_MIC_IO, false);
+        assert(n == (low ? 1u : 2u));
+        assert(a[n - 1].id == MC100_ACT_STOP_CAPTURE && a[n - 1].generation == g);
+        event(s, MC100_EV_ARMED, g, 0, 8, 0, false);
+        assert(n == 0);
+        event(s, MC100_EV_TRIGGER, g, 101, 9, 0, true);
+        assert(n == 0);
+        if (closing) {
+            event(s, MC100_EV_CLOSED, old, 0, 10, 0, false);
+            assert(n == 1 && a[0].id == MC100_ACT_RELEASE && a[0].generation == old);
+        }
+        event(s, MC100_EV_CAPTURE_STOPPED, g, 101, 11, 0, armed != 0);
+        assert(n == 2 && a[0].id == MC100_ACT_RELEASE && a[0].generation == g);
+        assert(a[1].id == MC100_ACT_HOLD); h = a[1].generation;
+        event(s, MC100_EV_TRIGGER, g, 101, 12, 0, true);
+        assert(n == 0);
+        event(s, MC100_EV_CAPTURE_STOPPED, g, 102, 13, 0, true);
+        assert(n == 0);
+        event(s, MC100_EV_HELD, h, 0, 14, 0, false);
+        assert(mc100_state_get(s) == (low ? MC100_LOW_BAT_HOLD : MC100_FAULT));
+        mc100_state_destroy(s);
+    }
+}
+static void below_minimum_rejected(void)
+{
+    mc100_state_t *s = mc100_state_create();
+    uint64_t g = record(s), next;
+    event(s, MC100_EV_SILENCE_END, g, 0, 4, 0, false);
+    event(s, MC100_EV_CAPTURE_STOPPED, g, 100, 5, 0, true);
+    next = a[1].generation;
+    event(s, MC100_EV_ARMED, next, 0, 6, 0, false);
+    event(s, MC100_EV_TRIGGER, next, 100, 7, 0, true);
+    assert(mc100_state_get(s) == MC100_FAULT);
+    assert(n == 2 && a[0].id == MC100_ACT_REPORT_FAULT && a[0].detail == MC100_FAULT_INTERNAL_PROTOCOL);
+    assert(a[1].id == MC100_ACT_HOLD);
+    event(s, MC100_EV_CLOSED, g, 0, 8, 0, false);
+    assert(n == 0); /* No OPEN with a fabricated snapshot first sequence. */
+    mc100_state_destroy(s);
+}
+static void fault_escalation_and_late_acks(void)
+{
+    size_t phase, cause;
+    /* Every finalization phase remains bounded, including canceled ARM tokens.
+     * First diagnostic is emitted once; no timeout can publish a success close. */
+    for (phase = 0; phase < 4; ++phase) for (cause = 0; cause < 3; ++cause) {
+        mc100_state_t *s = mc100_state_create();
+        uint64_t g, h, t;
+        if (phase == 0 || phase == 3) g = boot(s, 0);
+        else g = record(s);
+        if (phase == 3) {
+            event(s, MC100_EV_ARMED, g, 0, 1, 0, false);
+            event(s, MC100_EV_TRIGGER, g, 0, 2, 0, true);
+        }
+        event(s, MC100_EV_FAULT, g, 0, 4, MC100_FAULT_QUEUE_OVERFLOW, false);
+        assert(n == 2 && a[0].detail == MC100_FAULT_QUEUE_OVERFLOW);
+        assert(a[1].id == MC100_ACT_STOP_CAPTURE);
+        t = 204;
+        if (phase == 2 || phase == 3) {
+            event(s, MC100_EV_CAPTURE_STOPPED, g, 50, 5, 0, true);
+            assert(n == (phase == 2 ? 1u : 0u));
+            if (phase == 2) {
+                assert(a[0].id == MC100_ACT_CLOSE_THROUGH && a[0].detail == MC100_FAULT_QUEUE_OVERFLOW);
+                t = 1505;
+            } else t = 1502;
+        }
+        if (cause == 0) {
+            event(s, MC100_EV_FAULT, g, 0, t - 1, MC100_FAULT_MIC_IO, false);
+            assert(n == 0);
+            event(s, MC100_EV_TICK, 0, 0, t, 0, false);
+        } else if (cause == 1)
+            event(s, MC100_EV_FAULT, g, 0, 6, MC100_FAULT_STORAGE_IO, false);
+        else event(s, MC100_EV_CRITICAL, 0, 0, 6, 0, false);
+        assert(n == 1 && a[0].id == MC100_ACT_HOLD);
+        assert(a[0].detail == (uint32_t)(cause == 2 ? MC100_HOLD_CRITICAL_NO_WRITES : MC100_HOLD_FAULT_NO_WRITES));
+        assert(mc100_state_get(s) == MC100_FAULT);
+        h = a[0].generation;
+        event(s, MC100_EV_OPENED, g, 0, t + 1, 0, false); assert(n == 0);
+        event(s, MC100_EV_CAPTURE_STOPPED, g, 99, t + 2, 0, true); assert(n == 0);
+        event(s, MC100_EV_CLOSED, g, 0, t + 3, 0, false); assert(n == 0);
+        event(s, MC100_EV_HELD, h, 0, t + 4, 0, false);
+        assert(n == 1 && a[0].id == MC100_ACT_RELEASE && a[0].generation == g);
+        assert(mc100_state_get(s) == MC100_FAULT);
+        mc100_state_destroy(s);
+    }
+}
+static void safe_fault_cancels_pending_and_preserves_old_close(void)
+{
+    mc100_state_t *s = mc100_state_create();
+    uint64_t g = record(s), next;
+    event(s, MC100_EV_SILENCE_END, g, 0, 4, 0, false);
+    event(s, MC100_EV_CAPTURE_STOPPED, g, 100, 5, 0, true);
+    assert(a[0].seq == 100 && a[0].detail == 0);
+    next = a[1].generation;
+    event(s, MC100_EV_ARMED, next, 0, 6, 0, false);
+    event(s, MC100_EV_TRIGGER, next, 101, 7, 0, true);
+    event(s, MC100_EV_FAULT, next, 0, 8, MC100_FAULT_MIC_IO, false);
+    assert(n == 2 && a[1].id == MC100_ACT_STOP_CAPTURE && a[1].generation == next);
+    event(s, MC100_EV_CAPTURE_STOPPED, next, 102, 9, 0, true);
+    assert(n == 1 && a[0].id == MC100_ACT_RELEASE && a[0].generation == next);
+    event(s, MC100_EV_CAPTURE_STOPPED, g, 999, 10, 0, true); assert(n == 0);
+    event(s, MC100_EV_CLOSED, g, 0, 11, 0, false);
+    assert(n == 2 && a[0].id == MC100_ACT_RELEASE && a[0].generation == g);
+    assert(a[1].id == MC100_ACT_HOLD && mc100_state_get(s) == MC100_FAULT);
+    mc100_state_destroy(s);
+}
+static void canceled_low_grant_deadline_and_fault_opening(void)
+{
+    mc100_state_t *s = mc100_state_create();
+    uint64_t g = boot(s, 0), h;
+    event(s, MC100_EV_LOW, 0, 0, 1, 0, false);
+    assert(n == 1 && a[0].id == MC100_ACT_STOP_CAPTURE);
+    event(s, MC100_EV_ARMED, g, 0, 199, 0, false); assert(n == 0);
+    event(s, MC100_EV_TRIGGER, g, 0, 200, 0, true); assert(n == 0);
+    event(s, MC100_EV_CAPTURE_STOPPED, g, 0, 201, 0, false);
+    assert(n == 2 && a[0].detail == MC100_FAULT_CONTROL_TIMEOUT && a[1].id == MC100_ACT_HOLD);
+    assert(mc100_state_get(s) == MC100_FAULT); h = a[1].generation;
+    event(s, MC100_EV_HELD, h, 0, 202, 0, false);
+    assert(n == 1 && a[0].id == MC100_ACT_RELEASE && a[0].generation == g);
+    mc100_state_destroy(s);
+    s = mc100_state_create(); g = boot(s, 0);
+    event(s, MC100_EV_ARMED, g, 0, 1, 0, false);
+    event(s, MC100_EV_TRIGGER, g, 0, 2, 0, true);
+    event(s, MC100_EV_FAULT, g, 0, 3, MC100_FAULT_MIC_IO, false);
+    assert(n == 2 && a[1].id == MC100_ACT_STOP_CAPTURE);
+    event(s, MC100_EV_CAPTURE_STOPPED, g, 0, 4, 0, false); assert(n == 0);
+    event(s, MC100_EV_OPENED, g, 0, 5, 0, false);
+    assert(n == 1 && a[0].id == MC100_ACT_CLOSE_THROUGH && !a[0].seq_valid);
+    assert(a[0].detail == MC100_FAULT_MIC_IO);
+    event(s, MC100_EV_CLOSED, g, 0, 6, 0, false);
+    assert(n == 2 && a[1].id == MC100_ACT_HOLD);
+    mc100_state_destroy(s);
+}
+int main(int argc, char **argv)
+{
+    if (argc == 2) {
+        if (strcmp(argv[1], "safe_fault") == 0) safe_fault_prefix();
+        else if (strcmp(argv[1], "grant") == 0) canceled_grant_low_and_fault();
+        else if (strcmp(argv[1], "minimum") == 0) below_minimum_rejected();
+        else return 2;
+        return 0;
+    }
+    safe_fault_prefix(); canceled_grant_low_and_fault(); below_minimum_rejected();
+    fault_escalation_and_late_acks(); safe_fault_cancels_pending_and_preserves_old_close();
+    canceled_low_grant_deadline_and_fault_opening();
     close_drain_and_retrigger(); armed_required_and_timeouts();
     low_requires_owner_ack(); low_drain_and_pending_release();
     critical_forbids_close_and_fault_scope(); no_data_and_open_deadline();
