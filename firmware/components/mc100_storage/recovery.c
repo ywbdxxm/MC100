@@ -63,6 +63,23 @@ static bool normal_base(const char *value) {
   return *cursor == 0;
 }
 
+static bool reserve_base(const char *value) {
+  size_t length = strlen(value);
+  if (length < 42 || value[32] != '_' ||
+      strncmp(value + 33, "reserve_", 8))
+    return false;
+  for (size_t i = 0; i < 32; ++i)
+    if (!((value[i] >= '0' && value[i] <= '9') ||
+          (value[i] >= 'a' && value[i] <= 'f')))
+      return false;
+  const char *cursor = value + 41;
+  if (*cursor < '0' || *cursor > '9')
+    return false;
+  while (*cursor >= '0' && *cursor <= '9')
+    ++cursor;
+  return *cursor == 0;
+}
+
 static bool candidate_base(const char *path, char out[MC100_PATH_BYTES]) {
   static const char *const suffixes[] = {".partial.wav", ".wav.part", ".idx.part",
                                          ".wav", ".idx"};
@@ -76,7 +93,7 @@ static bool candidate_base(const char *path, char out[MC100_PATH_BYTES]) {
       return false;
     memcpy(out, path, length);
     out[length] = 0;
-    return normal_base(out);
+    return normal_base(out) || reserve_base(out);
   }
   return false;
 }
@@ -240,6 +257,56 @@ static mc100_result_t scan_index(recovery_t *recovery, mc100_file_t index,
   return MC100_OK;
 }
 
+static mc100_result_t wav_header_matches(recovery_t *recovery,
+                                         mc100_file_t wav,
+                                         uint64_t wav_size,
+                                         uint64_t pcm_bytes) {
+  if (pcm_bytes > MC100_MAX_PCM_BYTES ||
+      wav_size != MC100_WAV_HEADER_BYTES + pcm_bytes)
+    return MC100_CORRUPT;
+  uint8_t actual[MC100_WAV_HEADER_BYTES];
+  uint8_t expected[MC100_WAV_HEADER_BYTES];
+  mc100_result_t result =
+      read_exact(recovery, wav, 0, actual, sizeof(actual));
+  if (result != MC100_OK)
+    return result;
+  result = mc100_wav_header(expected, (uint32_t)pcm_bytes);
+  if (result != MC100_OK)
+    return result;
+  return memcmp(actual, expected, sizeof(actual)) ? MC100_CORRUPT : MC100_OK;
+}
+
+static mc100_result_t quick_final(recovery_t *recovery, mc100_file_t index,
+                                  uint64_t index_size, mc100_file_t wav,
+                                  uint64_t wav_size,
+                                  const mc100_index_header_t *header) {
+  if (index_size < MC100_INDEX_HEADER_BYTES + MC100_INDEX_RECORD_BYTES ||
+      (index_size - MC100_INDEX_HEADER_BYTES) % MC100_INDEX_RECORD_BYTES)
+    return MC100_CORRUPT;
+  uint64_t record_count =
+      (index_size - MC100_INDEX_HEADER_BYTES) / MC100_INDEX_RECORD_BYTES;
+  if (record_count == 0 || record_count > MC100_INDEX_MAX_RECORDS)
+    return MC100_CORRUPT;
+  uint8_t encoded[MC100_INDEX_RECORD_BYTES];
+  mc100_result_t result = read_exact(
+      recovery, index,
+      MC100_INDEX_HEADER_BYTES +
+          (record_count - 1) * MC100_INDEX_RECORD_BYTES,
+      encoded, sizeof(encoded));
+  mc100_index_record_t record = {0};
+  if (result == MC100_OK)
+    result = mc100_index_decode(encoded, &record);
+  if (result != MC100_OK)
+    return result;
+  if (record.type != MC100_INDEX_FINAL ||
+      record.journal_seq != record_count - 1 ||
+      record.generation != header->generation || record.pcm_offset == 0 ||
+      record.first_source_sample !=
+          header->first_source_sample + record.pcm_offset / 2)
+    return MC100_CORRUPT;
+  return wav_header_matches(recovery, wav, wav_size, record.pcm_offset);
+}
+
 static mc100_result_t verify_recovered(recovery_t *recovery,
                                        const char *path,
                                        mc100_file_t index,
@@ -370,6 +437,78 @@ static void report_invalid(mc100_recovery_report_t *report) {
   ++report->preserved;
 }
 
+static mc100_result_t process_reserve(recovery_t *recovery,
+                                      const char *base) {
+  char idx_path[MC100_PATH_BYTES];
+  char wav_path[MC100_PATH_BYTES];
+  if (!make_path(idx_path, base, ".idx.part") ||
+      !make_path(wav_path, base, ".wav.part"))
+    return MC100_INVALID;
+  bool has_idx = false;
+  bool has_wav = false;
+  uint64_t idx_size = 0;
+  uint64_t wav_size = 0;
+  mc100_result_t result =
+      path_exists(recovery, idx_path, &has_idx, &idx_size);
+  if (result == MC100_OK)
+    result = path_exists(recovery, wav_path, &has_wav, &wav_size);
+  if (result != MC100_OK)
+    return result;
+  if (!has_idx || !has_wav ||
+      idx_size != MC100_INDEX_HEADER_BYTES +
+                      (uint64_t)MC100_INDEX_MAX_RECORDS *
+                          MC100_INDEX_RECORD_BYTES ||
+      wav_size != MC100_WAV_HEADER_BYTES + (uint64_t)MC100_MAX_PCM_BYTES) {
+    report_invalid(recovery->report);
+    return MC100_OK;
+  }
+
+  mc100_file_t index = NULL;
+  mc100_file_t wav = NULL;
+  result = recovery->io->open_read(recovery->io_ctx, idx_path, &index);
+  if (result == MC100_OK)
+    result = recovery->io->open_read(recovery->io_ctx, wav_path, &wav);
+  uint8_t encoded[MC100_INDEX_HEADER_BYTES];
+  mc100_index_header_t header = {0};
+  if (result == MC100_OK)
+    result = read_exact(recovery, index, 0, encoded, sizeof(encoded));
+  if (result == MC100_OK)
+    result = mc100_index_header_decode(encoded, &header);
+  char identity[33];
+  if (result == MC100_OK) {
+    boot_text(identity, header.boot_id);
+    if (header.flags != MC100_INDEX_RESERVED ||
+        strncmp(identity, base, sizeof(identity) - 1))
+      result = MC100_CORRUPT;
+  }
+  uint8_t actual_wav[MC100_WAV_HEADER_BYTES];
+  uint8_t expected_wav[MC100_WAV_HEADER_BYTES];
+  if (result == MC100_OK)
+    result = read_exact(recovery, wav, 0, actual_wav, sizeof(actual_wav));
+  if (result == MC100_OK)
+    result = mc100_wav_header(expected_wav, 0);
+  if (result == MC100_OK &&
+      memcmp(actual_wav, expected_wav, sizeof(actual_wav)))
+    result = MC100_CORRUPT;
+  if (result == MC100_CORRUPT) {
+    report_invalid(recovery->report);
+    result = MC100_OK;
+  } else if (result == MC100_OK) {
+    ++recovery->report->preserved;
+  }
+  if (wav != NULL) {
+    mc100_result_t closed = recovery->io->close(recovery->io_ctx, wav);
+    if (result == MC100_OK)
+      result = closed;
+  }
+  if (index != NULL) {
+    mc100_result_t closed = recovery->io->close(recovery->io_ctx, index);
+    if (result == MC100_OK)
+      result = closed;
+  }
+  return result;
+}
+
 static mc100_result_t process_base(recovery_t *recovery, const char *base) {
   char idx_final[MC100_PATH_BYTES], idx_part[MC100_PATH_BYTES];
   char wav_final[MC100_PATH_BYTES], wav_part[MC100_PATH_BYTES];
@@ -385,16 +524,18 @@ static mc100_result_t process_base(recovery_t *recovery, const char *base) {
   bool has_idx_final = false, has_idx_part = false;
   bool has_wav_final = false, has_wav_part = false, has_wav_partial = false;
   uint64_t idx_final_size = 0, idx_part_size = 0;
+  uint64_t wav_final_size = 0, wav_part_size = 0, wav_partial_size = 0;
   mc100_result_t result = path_exists(recovery, idx_final, &has_idx_final,
                                       &idx_final_size);
   if (result == MC100_OK)
     result = path_exists(recovery, idx_part, &has_idx_part, &idx_part_size);
   if (result == MC100_OK)
-    result = path_exists(recovery, wav_final, &has_wav_final, NULL);
+    result = path_exists(recovery, wav_final, &has_wav_final, &wav_final_size);
   if (result == MC100_OK)
-    result = path_exists(recovery, wav_part, &has_wav_part, NULL);
+    result = path_exists(recovery, wav_part, &has_wav_part, &wav_part_size);
   if (result == MC100_OK)
-    result = path_exists(recovery, wav_partial, &has_wav_partial, NULL);
+    result = path_exists(recovery, wav_partial, &has_wav_partial,
+                         &wav_partial_size);
   if (result != MC100_OK)
     return result;
   unsigned index_count = (unsigned)has_idx_final + (unsigned)has_idx_part;
@@ -408,6 +549,9 @@ static mc100_result_t process_base(recovery_t *recovery, const char *base) {
   uint64_t idx_size = has_idx_final ? idx_final_size : idx_part_size;
   const char *wav_path =
       has_wav_final ? wav_final : has_wav_part ? wav_part : wav_partial;
+  uint64_t wav_size = has_wav_final   ? wav_final_size
+                      : has_wav_part  ? wav_part_size
+                                      : wav_partial_size;
   if (idx_size < MC100_INDEX_HEADER_BYTES) {
     report_invalid(recovery->report);
     return MC100_OK;
@@ -419,7 +563,7 @@ static mc100_result_t process_base(recovery_t *recovery, const char *base) {
   if (result == MC100_OK)
     result = recovery->io->open_read(recovery->io_ctx, wav_path, &wav);
   uint8_t encoded_header[MC100_INDEX_HEADER_BYTES];
-  mc100_index_header_t header;
+  mc100_index_header_t header = {0};
   if (result == MC100_OK)
     result = read_exact(recovery, index, 0, encoded_header,
                         sizeof(encoded_header));
@@ -427,6 +571,35 @@ static mc100_result_t process_base(recovery_t *recovery, const char *base) {
     result = mc100_index_header_decode(encoded_header, &header);
   if (result == MC100_OK && !header_matches_base(&header, base))
     result = MC100_CORRUPT;
+  if (result == MC100_OK && !has_wav_partial) {
+    mc100_result_t quick =
+        quick_final(recovery, index, idx_size, wav, wav_size, &header);
+    if (quick == MC100_OK) {
+      mc100_result_t closed = recovery->io->close(recovery->io_ctx, wav);
+      wav = NULL;
+      if (closed == MC100_OK)
+        closed = recovery->io->close(recovery->io_ctx, index);
+      index = NULL;
+      if (closed != MC100_OK)
+        return closed;
+      if (has_wav_part)
+        closed = recovery->io->rename_no_replace(recovery->io_ctx, wav_part,
+                                                 wav_final);
+      if (closed == MC100_OK && has_idx_part)
+        closed = recovery->io->rename_no_replace(recovery->io_ctx, idx_part,
+                                                 idx_final);
+      if (closed == MC100_NOT_READY) {
+        report_invalid(recovery->report);
+        return MC100_OK;
+      }
+      if (closed != MC100_OK)
+        return closed;
+      ++recovery->report->preserved;
+      return MC100_OK;
+    }
+    if (quick != MC100_CORRUPT)
+      result = quick;
+  }
   scan_t scan = {0};
   if (result == MC100_OK)
     result = scan_index(recovery, index, idx_size, wav, &header, &scan);
@@ -437,8 +610,19 @@ static mc100_result_t process_base(recovery_t *recovery, const char *base) {
     report_invalid(recovery->report);
     result = MC100_OK;
   } else if (result == MC100_OK) {
+    bool complete_incident =
+        has_wav_partial && has_idx_final &&
+        scan.terminal_type == MC100_INDEX_INCIDENT &&
+        idx_size == MC100_INDEX_HEADER_BYTES +
+                        (uint64_t)scan.trusted_records *
+                            MC100_INDEX_RECORD_BYTES;
     mc100_result_t verified =
-        verify_recovered(recovery, recovered, index, &header, &scan);
+        complete_incident
+            ? wav_header_matches(recovery, wav, wav_size,
+                                 scan.validation.pcm_bytes)
+            : verify_recovered(recovery, recovered, index, &header, &scan);
+    if (complete_incident && verified == MC100_CORRUPT)
+      verified = verify_recovered(recovery, recovered, index, &header, &scan);
     if (verified == MC100_OK) {
       ++recovery->report->preserved;
     } else if (verified == MC100_NOT_READY) {
@@ -496,7 +680,8 @@ mc100_result_t mc100_recover(const mc100_io_t *io, void *ctx,
     memcpy(cursor, base, strlen(base) + 1);
     result = deadline(&recovery);
     if (result == MC100_OK)
-      result = process_base(&recovery, base);
+      result = reserve_base(base) ? process_reserve(&recovery, base)
+                                  : process_base(&recovery, base);
     if (result != MC100_OK)
       return result;
   }

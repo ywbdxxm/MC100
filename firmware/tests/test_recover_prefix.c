@@ -169,9 +169,56 @@ static void metadata_fuzz_10000(void) {
   }
 }
 
+static void invalid_inputs_are_reported_and_preserved(void) {
+  const uint8_t boot[16] = {0x55};
+  char base[MC100_PATH_BYTES], wav[MC100_PATH_BYTES], idx[MC100_PATH_BYTES];
+  char recovered[MC100_PATH_BYTES];
+  recovery_test_base(base, boot, 6, 2);
+  recovery_test_path(wav, base, ".wav.part");
+  recovery_test_path(idx, base, ".idx.part");
+  recovery_test_path(recovered, base, ".recovered.wav");
+  uint8_t pcm[64];
+  memset(pcm, 0x39, sizeof(pcm));
+
+  mc100_fake_io_t *missing = mc100_fake_io_create(UINT64_C(1048576));
+  assert(missing != NULL);
+  recovery_test_wav(missing, wav, pcm, sizeof(pcm), sizeof(pcm), 0);
+  uint32_t source_hash = recovery_test_hash(missing, wav);
+  uint64_t now = 0;
+  mc100_recovery_report_t report;
+  assert(mc100_recover(mc100_fake_io_ops(), missing, 30000,
+                       recovery_test_now, &now, &report) == MC100_OK);
+  assert(report.recovered == 0 && report.preserved == 1 &&
+         report.invalid == 1);
+  assert(!recovery_test_exists(missing, recovered));
+  assert(recovery_test_hash(missing, wav) == source_hash);
+  mc100_fake_io_destroy(missing);
+
+  mc100_fake_io_t *unknown = mc100_fake_io_create(UINT64_C(1048576));
+  assert(unknown != NULL);
+  recovery_test_wav(unknown, wav, pcm, sizeof(pcm), sizeof(pcm), 0);
+  mc100_index_header_t header = claimed_header(boot, 6, 2);
+  uint8_t bytes[MC100_INDEX_HEADER_BYTES];
+  assert(mc100_index_header_encode(bytes, &header) == MC100_OK);
+  bytes[8] = 2;
+  put_u32(bytes + 508, mc100_crc32(bytes, 508));
+  mc100_file_t file = recovery_test_create(unknown, idx, sizeof(bytes));
+  recovery_test_write(unknown, file, 0, bytes, sizeof(bytes));
+  recovery_test_finish(unknown, file);
+  source_hash = recovery_test_hash(unknown, idx);
+  assert(mc100_recover(mc100_fake_io_ops(), unknown, 30000,
+                       recovery_test_now, &now, &report) == MC100_OK);
+  assert(report.recovered == 0 && report.preserved == 1 &&
+         report.invalid == 1);
+  assert(recovery_test_hash(unknown, idx) == source_hash);
+  assert(!recovery_test_exists(unknown, recovered));
+  mc100_fake_io_destroy(unknown);
+}
+
 int main(void) {
   bad_block_stops_the_prefix();
   torn_index_tail_keeps_the_last_complete_block();
+  invalid_inputs_are_reported_and_preserved();
   metadata_fuzz_10000();
   puts("recover_prefix: first-bad-block stop, torn tail, originals preserved, "
        "10000 fixed-seed metadata cases PASS");
