@@ -1,0 +1,20 @@
+# Local editor and operating-system files
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# EasyEDA agent/version test artifacts (the design source is PCB1.epro2)
+/.easyeda/version-test-*/
+
+# ESP-IDF generated output
+/firmware/build/
+/firmware/sdkconfig.old
+
+# Temporary and log files
+*.bak
+*.log
+*.swp
+*.swo
+*.tmp
+*~
