@@ -9,6 +9,8 @@ Desktop.ini
 
 # ESP-IDF generated output
 /firmware/build/
+/firmware/out/
+/firmware/sdkconfig
 /firmware/sdkconfig.old
 
 # Temporary and log files

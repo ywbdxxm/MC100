@@ -1,53 +1,77 @@
-| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-C5 | ESP32-C6 | ESP32-C61 | ESP32-H2 | ESP32-H21 | ESP32-H4 | ESP32-P4 | ESP32-S2 | ESP32-S3 | ESP32-S31 | Linux |
-| ----------------- | ----- | -------- | -------- | -------- | -------- | --------- | -------- | --------- | -------- | -------- | -------- | -------- | --------- | ----- |
+# MC100 firmware infrastructure
 
-# Hello World Example
+This is the T01 boardless baseline, not a recorder. The application prints
+`MC100 infrastructure only / recording not implemented` once, then blocks.
+It does not enter LISTEN, initialize audio/SD/radio, or restart on a countdown.
 
-Starts a FreeRTOS task to print "Hello World".
+## Identity and environment checks
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+The board contract is MC100 V1 / ESP32-S3-MINI-1-N8: target `esp32s3`, 8 MB Flash,
+no PSRAM. `dependencies.lock.json` pins the exact ESP-IDF v6.1 revision and records
+that no managed third-party components are used yet. Do not replace the SDK with
+a different ambient installation or install tools into an unidentified environment.
 
-## How to use example
+For target work, activate the project's matching ESP-IDF installation in a fresh
+PowerShell terminal. For EIM, select its matching installation-specific activation
+profile; generic `export.ps1` is not a substitute. Be aware that some generated EIM
+profiles update the global selection: keep that side effect disabled when only
+performing a project build. `build.ps1` does not activate or install any environment.
 
-Follow detailed instructions provided specifically for this example.
+Before building it verifies the clean SDK checkout/revision, active IDF-owned Python,
+tools root, target compiler, CMake and Ninja. Every native command must exit zero.
+After building it verifies the generated SDK/target/config metadata, Flash size,
+80 MHz startup CPU frequency, USB Serial/JTAG primary console, brownout and watchdogs,
+excluded wireless/PSRAM components, and decoded partition table.
 
-Select the instructions depending on Espressif chip installed on your development board:
+## Host tests
 
-- [ESP32 Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/stable/get-started/index.html)
-- [ESP32-S2 Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s2/get-started/index.html)
+Use an activated native C11 compiler and CMake/Ninja/CTest environment (on Windows,
+a Visual Studio Developer PowerShell with MSVC C11 support is suitable). Do not use
+the ESP32 cross-compiler as the host compiler. From the repository root:
 
-
-## Example folder contents
-
-The project **hello_world** contains one source file in C language [hello_world_main.c](main/hello_world_main.c). The file is located in folder [main](main).
-
-ESP-IDF projects are built using CMake. The project build configuration is contained in `CMakeLists.txt` files that provide set of directives and instructions describing the project's source files and targets (executable, library, or both).
-
-Below is short explanation of remaining files in the project folder.
-
+```powershell
+pwsh -File firmware/tools/test-host.ps1 -Clean
+pwsh -File firmware/tests/test_build_tools.ps1
 ```
-├── CMakeLists.txt
-├── pytest_hello_world.py      Python script used for automated testing
-├── main
-│   ├── CMakeLists.txt
-│   └── hello_world_main.c
-└── README.md                  This is the file you are currently reading
+
+The equivalent portable CMake commands are:
+
+```powershell
+cmake -S firmware/host -B firmware/out/host -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build firmware/out/host
+ctest --test-dir firmware/out/host --output-on-failure
 ```
 
-For more information on structure and contents of ESP-IDF projects, please refer to Section [Build System](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/build-system.html) of the ESP-IDF Programming Guide.
+Tests use production public headers, standard C assertions (NDEBUG is explicitly
+undefined), C11, and compiler warnings as errors. On a GCC/Clang host, pass
+`-Sanitizers` to the script (or `-DMC100_ENABLE_SANITIZERS=ON` to CMake) for ASan/UBSan.
+MSVC sanitizer requests fail rather than silently skip UBSan.
 
-## Troubleshooting
+## Target build
 
-* Program upload failure
+From the same activated ESP-IDF terminal:
 
-    * Hardware connection is not correct: run `idf.py -p PORT monitor`, and reboot your board to see if there are any output logs.
-    * The baud rate for downloading is too high: lower your baud rate in the `menuconfig` menu, and try again.
+```powershell
+pwsh -File firmware/tools/build.ps1 -Profile evt -Clean
+```
 
-## Technical support and feedback
+The script invokes the validated installation's Python and `idf.py` with absolute
+project, output, `SDKCONFIG`, defaults and target arguments. Outputs and generated
+configuration stay under `firmware/out/target`; the user's `firmware/sdkconfig` and
+existing `firmware/build` remain untouched. `-OutputDirectory out/<new-name>` supports
+a separate output. Traversal outside `firmware/out`, output-root deletion and linked
+output ancestors are rejected. `-Clean` deletes only the checked generated directory.
+Unknown profiles fail; `release` is unavailable. `-Profile host` runs host tests.
 
-Please use the following feedback channels:
+`sdkconfig.defaults` and `partitions.csv` are versioned policy. ESP-IDF v6.1 has a
+hidden `ESP_WIFI_ENABLED` SoC default: assigning it `n` does not disable Wi-Fi.
+Instead MINIMAL_BUILD and explicit dependencies omit `esp_wifi`, `bt` and `esp_psram`;
+the script checks this actual graph. Their unloaded Kconfig symbols are not assigned.
 
-* For technical queries, go to the [esp32.com](https://esp32.com/) forum
-* For a feature request or bug report, create a [GitHub issue](https://github.com/espressif/esp-idf/issues)
+## Limits
 
-We will get back to you as soon as possible.
+The host test checks fixed board pin/capability and RAM-layout contracts; compilation
+does not prove wiring or peripheral behavior. Target boot, Flash identity, USB operation,
+PDM/SD/ADC/LED, current draw, memory/stack high-water marks, recording and all HIL gates
+are NOT_RUN. Nothing here constitutes release readiness. Do not flash or infer a serial
+port from this boardless baseline.

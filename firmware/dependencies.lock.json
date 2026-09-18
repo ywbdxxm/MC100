@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "target": "esp32s3",
+  "esp_idf": {
+    "version": "v6.1",
+    "commit": "fff9895c82d744c7237be8847347bdd1b07c6643"
+  },
+  "managed_components": []
+}
