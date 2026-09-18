@@ -12,7 +12,9 @@ static void evt_task(void *argument)
 
 void app_main(void)
 {
-    if (xTaskCreatePinnedToCore(evt_task, "evt_storage", 12288, NULL, 8, NULL, 0) != pdPASS) {
+    /* exFAT LFN + reserve validation reached 9,768 bytes on the USB bench.
+     * Keep >=25% stack margin without reducing the audio buffers. */
+    if (xTaskCreatePinnedToCore(evt_task, "evt_storage", 16384, NULL, 8, NULL, 0) != pdPASS) {
         puts("MC100 EVT startup failed: no storage task; recording disabled");
         fflush(stdout);
     }
