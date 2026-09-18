@@ -74,3 +74,21 @@ foreach(name state battery_policy)
     mc100_host_checks(test_${name})
     add_test(NAME ${name} COMMAND test_${name})
 endforeach()
+
+add_library(mc100_audio STATIC
+    ../components/mc100_audio/audio.c
+    ../components/mc100_audio/preroll.c
+    ../components/mc100_audio/stream.c
+    ../components/mc100_audio/frame_assembler.c
+)
+target_include_directories(mc100_audio PUBLIC
+    ../components/mc100_audio/include
+    ../components/mc100_core/include
+)
+mc100_host_checks(mc100_audio)
+foreach(name frame_assembler preroll_handoff queue_full capture_gap)
+    add_executable(test_${name} ../tests/test_${name}.c)
+    target_link_libraries(test_${name} PRIVATE mc100_audio)
+    mc100_host_checks(test_${name})
+    add_test(NAME ${name} COMMAND test_${name})
+endforeach()
