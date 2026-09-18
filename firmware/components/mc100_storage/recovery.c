@@ -490,6 +490,17 @@ static mc100_result_t process_reserve(recovery_t *recovery,
   if (result == MC100_OK &&
       memcmp(actual_wav, expected_wav, sizeof(actual_wav)))
     result = MC100_CORRUPT;
+  uint8_t records[MC100_PCM_BLOCK_BYTES];
+  for (uint64_t offset = MC100_INDEX_HEADER_BYTES;
+       result == MC100_OK && offset < idx_size; offset += sizeof(records)) {
+    size_t count = (size_t)(idx_size - offset);
+    if (count > sizeof(records))
+      count = sizeof(records);
+    result = read_exact(recovery, index, offset, records, count);
+    for (size_t i = 0; result == MC100_OK && i < count; ++i)
+      if (records[i] != 0)
+        result = MC100_CORRUPT;
+  }
   if (result == MC100_CORRUPT) {
     report_invalid(recovery->report);
     result = MC100_OK;

@@ -389,6 +389,33 @@ static void claimed_reserve_is_not_reused_as_empty(void) {
   mc100_fake_io_destroy(fake);
 }
 
+static void dirty_reserved_index_tail_is_invalid(void) {
+  const uint8_t boot[16] = {0x76};
+  mc100_fake_io_t *fake = mc100_fake_io_create(UINT64_C(100000000));
+  assert(fake != NULL);
+  mc100_writer_t *writer =
+      mc100_writer_create(mc100_fake_io_ops(), fake, boot);
+  assert(writer != NULL && mc100_writer_prepare(writer) == MC100_OK);
+  mc100_writer_destroy(writer);
+  const char *idx =
+      "76000000000000000000000000000000_reserve_0.idx.part";
+  mc100_file_t file = NULL;
+  assert(mc100_fake_io_ops()->open_update(fake, idx, &file) == MC100_OK);
+  const uint8_t dirty = 0x5a;
+  recovery_test_write(fake, file, MC100_INDEX_HEADER_BYTES + 123, &dirty, 1);
+  recovery_test_finish(fake, file);
+  uint32_t idx_hash = recovery_test_hash(fake, idx);
+
+  uint64_t now = 0;
+  mc100_recovery_report_t report;
+  assert(mc100_recover(mc100_fake_io_ops(), fake, 30000,
+                       recovery_test_now, &now, &report) == MC100_OK);
+  assert(report.recovered == 0 && report.preserved == 2 &&
+         report.invalid == 1);
+  assert(recovery_test_hash(fake, idx) == idx_hash);
+  mc100_fake_io_destroy(fake);
+}
+
 int main(void) {
   second_run_validates_without_copying();
   interrupted_temporary_output_is_never_overwritten();
@@ -399,6 +426,7 @@ int main(void) {
   corrupt_incident_header_recovers_trusted_pcm();
   reserved_slots_stay_reusable_without_growth();
   claimed_reserve_is_not_reused_as_empty();
+  dirty_reserved_index_tail_is_invalid();
   puts("recover_idempotent: validated output, immutable collision/temp and "
        "injected deadline PASS");
   return 0;
