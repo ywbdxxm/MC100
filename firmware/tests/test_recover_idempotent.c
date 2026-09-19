@@ -15,6 +15,64 @@ static uint64_t advancing_now(void *ctx) {
   return value;
 }
 
+static uint64_t *list_clock;
+static size_t list_visits;
+static bool advance_after_list;
+
+typedef struct {
+  mc100_io_visit_fn visit;
+  void *ctx;
+} timed_visitor_t;
+
+static mc100_result_t timed_visit(void *ctx, const char *path) {
+  timed_visitor_t *visitor = ctx;
+  ++list_visits;
+  ++*list_clock;
+  return visitor->visit(visitor->ctx, path);
+}
+
+static mc100_result_t timed_list(void *ctx, mc100_io_visit_fn visit,
+                                 void *visit_ctx) {
+  timed_visitor_t visitor = {visit, visit_ctx};
+  mc100_result_t result =
+      mc100_fake_io_ops()->list(ctx, timed_visit, &visitor);
+  if (advance_after_list)
+    ++*list_clock;
+  return result;
+}
+
+static uint64_t *publication_clock;
+static size_t faulting_close_calls;
+
+static mc100_result_t timed_sync(void *ctx, mc100_file_t file) {
+  mc100_result_t result = mc100_fake_io_ops()->sync(ctx, file);
+  if (result == MC100_OK)
+    ++*publication_clock;
+  return result;
+}
+
+static mc100_result_t timed_close(void *ctx, mc100_file_t file) {
+  mc100_result_t result = mc100_fake_io_ops()->close(ctx, file);
+  if (result == MC100_OK)
+    ++*publication_clock;
+  return result;
+}
+
+static mc100_result_t fail_both_closes(void *ctx, mc100_file_t file) {
+  assert(mc100_fake_io_ops()->close(ctx, file) == MC100_OK);
+  ++faulting_close_calls;
+  return faulting_close_calls == 1 ? MC100_IO : MC100_FULL;
+}
+
+static mc100_result_t timed_rename(void *ctx, const char *source,
+                                   const char *destination) {
+  mc100_result_t result =
+      mc100_fake_io_ops()->rename_no_replace(ctx, source, destination);
+  if (result == MC100_OK)
+    ++*publication_clock;
+  return result;
+}
+
 static void create_candidate(mc100_fake_io_t *fake, char base[MC100_PATH_BYTES],
                              char wav[MC100_PATH_BYTES],
                              char idx[MC100_PATH_BYTES]) {
@@ -167,6 +225,69 @@ static void deadline_is_injected_and_nonblocking(void) {
   mc100_fake_io_destroy(fake);
 }
 
+static void deadline_stops_directory_visit_at_first_expired_entry(void) {
+  mc100_fake_io_t *fake = mc100_fake_io_create(UINT64_C(100000000));
+  assert(fake != NULL);
+  char base[MC100_PATH_BYTES], wav[MC100_PATH_BYTES], idx[MC100_PATH_BYTES];
+  create_candidate(fake, base, wav, idx);
+  mc100_io_t io = *mc100_fake_io_ops();
+  io.list = timed_list;
+  uint64_t now = 0;
+  list_clock = &now;
+  list_visits = 0;
+  advance_after_list = false;
+  mc100_recovery_report_t report;
+  assert(mc100_recover(&io, fake, 1, recovery_test_now, &now,
+                       &report) == MC100_TIMEOUT);
+  assert(report.timed_out == 1 && list_visits == 1);
+  list_clock = NULL;
+  mc100_fake_io_destroy(fake);
+}
+
+static void deadline_is_checked_after_empty_candidate_list(void) {
+  mc100_fake_io_t *fake = mc100_fake_io_create(UINT64_C(100000000));
+  assert(fake != NULL);
+  const uint8_t boot[16] = {0x45};
+  char base[MC100_PATH_BYTES], recovered[MC100_PATH_BYTES];
+  recovery_test_base(base, boot, 13, 0);
+  recovery_test_path(recovered, base, ".recovered.wav");
+  recovery_test_finish(fake, recovery_test_create(fake, recovered, 1));
+  mc100_io_t io = *mc100_fake_io_ops();
+  io.list = timed_list;
+  uint64_t now = 0;
+  list_clock = &now;
+  list_visits = 0;
+  advance_after_list = true;
+  mc100_recovery_report_t report;
+  assert(mc100_recover(&io, fake, 2, recovery_test_now, &now,
+                       &report) == MC100_TIMEOUT);
+  assert(report.timed_out == 1 && list_visits == 1);
+  list_clock = NULL;
+  mc100_fake_io_destroy(fake);
+}
+
+static void deadline_crossed_during_sync_prevents_recovered_publication(void) {
+  mc100_fake_io_t *fake = mc100_fake_io_create(UINT64_C(100000000));
+  assert(fake != NULL);
+  char base[MC100_PATH_BYTES], wav[MC100_PATH_BYTES], idx[MC100_PATH_BYTES];
+  char recovered[MC100_PATH_BYTES], temporary[MC100_PATH_BYTES];
+  create_candidate(fake, base, wav, idx);
+  recovery_test_path(recovered, base, ".recovered.wav");
+  recovery_test_path(temporary, base, ".recovering_0.wav.part");
+  mc100_io_t io = *mc100_fake_io_ops();
+  io.sync = timed_sync;
+  uint64_t now = 0;
+  publication_clock = &now;
+  mc100_recovery_report_t report;
+  assert(mc100_recover(&io, fake, 1, recovery_test_now, &now,
+                       &report) == MC100_TIMEOUT);
+  assert(report.timed_out == 1 && report.recovered == 0);
+  assert(recovery_test_exists(fake, temporary));
+  assert(!recovery_test_exists(fake, recovered));
+  publication_clock = NULL;
+  mc100_fake_io_destroy(fake);
+}
+
 static void create_terminal_candidate(mc100_fake_io_t *fake, uint8_t identity,
                                       const char *wav_suffix,
                                       const char *idx_suffix, bool incident,
@@ -205,6 +326,55 @@ static void create_terminal_candidate(mc100_fake_io_t *fake, uint8_t identity,
   }
   recovery_test_idx(fake, idx, &header, records, 2,
                     2 * MC100_INDEX_RECORD_BYTES);
+}
+
+static void deadline_crossed_during_close_prevents_final_publication(void) {
+  mc100_fake_io_t *fake = mc100_fake_io_create(UINT64_C(100000000));
+  assert(fake != NULL);
+  char base[MC100_PATH_BYTES], wav[MC100_PATH_BYTES], idx[MC100_PATH_BYTES];
+  char final_wav[MC100_PATH_BYTES], final_idx[MC100_PATH_BYTES];
+  create_terminal_candidate(fake, 0x64, ".wav.part", ".idx.part", false,
+                            base, wav, idx);
+  recovery_test_path(final_wav, base, ".wav");
+  recovery_test_path(final_idx, base, ".idx");
+  mc100_io_t io = *mc100_fake_io_ops();
+  io.close = timed_close;
+  uint64_t now = 0;
+  publication_clock = &now;
+  mc100_recovery_report_t report;
+  assert(mc100_recover(&io, fake, 1, recovery_test_now, &now,
+                       &report) == MC100_TIMEOUT);
+  assert(report.timed_out == 1);
+  assert(recovery_test_exists(fake, wav) && recovery_test_exists(fake, idx));
+  assert(!recovery_test_exists(fake, final_wav) &&
+         !recovery_test_exists(fake, final_idx));
+  publication_clock = NULL;
+  mc100_fake_io_destroy(fake);
+}
+
+static void deadline_between_final_renames_stops_second_publication(void) {
+  mc100_fake_io_t *fake = mc100_fake_io_create(UINT64_C(100000000));
+  assert(fake != NULL);
+  char base[MC100_PATH_BYTES], wav[MC100_PATH_BYTES], idx[MC100_PATH_BYTES];
+  char final_wav[MC100_PATH_BYTES], final_idx[MC100_PATH_BYTES];
+  create_terminal_candidate(fake, 0x65, ".wav.part", ".idx.part", false,
+                            base, wav, idx);
+  recovery_test_path(final_wav, base, ".wav");
+  recovery_test_path(final_idx, base, ".idx");
+  mc100_io_t io = *mc100_fake_io_ops();
+  io.rename_no_replace = timed_rename;
+  uint64_t now = 0;
+  publication_clock = &now;
+  mc100_recovery_report_t report;
+  assert(mc100_recover(&io, fake, 1, recovery_test_now, &now,
+                       &report) == MC100_TIMEOUT);
+  assert(report.timed_out == 1);
+  assert(recovery_test_exists(fake, final_wav));
+  assert(recovery_test_exists(fake, idx));
+  assert(!recovery_test_exists(fake, wav) &&
+         !recovery_test_exists(fake, final_idx));
+  publication_clock = NULL;
+  mc100_fake_io_destroy(fake);
 }
 
 static void finalized_naming_states_converge_without_copy(void) {
@@ -259,6 +429,60 @@ static void complete_history_uses_the_fast_path(void) {
     if (op->kind == 'R' && !strcmp(op->path, wav))
       assert(op->offset == 0 && op->length == MC100_WAV_HEADER_BYTES);
   }
+  mc100_fake_io_destroy(fake);
+}
+
+static void quick_final_closes_index_after_wav_close_error(void) {
+  mc100_fake_io_t *fake = mc100_fake_io_create(UINT64_C(100000000));
+  assert(fake != NULL);
+  char base[MC100_PATH_BYTES], wav[MC100_PATH_BYTES], idx[MC100_PATH_BYTES];
+  create_terminal_candidate(fake, 0x73, ".wav.part", ".idx.part", false,
+                            base, wav, idx);
+  size_t start = mc100_fake_io_log_count(fake);
+  uint64_t now = 0;
+  mc100_recovery_report_t report;
+  assert(mc100_recover(mc100_fake_io_ops(), fake, 30000,
+                       recovery_test_now, &now, &report) == MC100_OK);
+  size_t wav_close = 0;
+  for (size_t i = start; i < mc100_fake_io_log_count(fake); ++i) {
+    const mc100_fake_op_t *op = mc100_fake_io_log(fake, i);
+    if (op->kind == 'C' && !strcmp(op->path, wav)) {
+      wav_close = i - start + 1;
+      break;
+    }
+  }
+  assert(wav_close != 0);
+  mc100_fake_io_destroy(fake);
+
+  fake = mc100_fake_io_create(UINT64_C(100000000));
+  assert(fake != NULL);
+  create_terminal_candidate(fake, 0x73, ".wav.part", ".idx.part", false,
+                            base, wav, idx);
+  start = mc100_fake_io_log_count(fake);
+  mc100_fake_io_fault(fake, wav_close, MC100_IO, false);
+  assert(mc100_recover(mc100_fake_io_ops(), fake, 30000,
+                       recovery_test_now, &now, &report) == MC100_IO);
+  bool index_closed = false;
+  for (size_t i = start; i < mc100_fake_io_log_count(fake); ++i) {
+    const mc100_fake_op_t *op = mc100_fake_io_log(fake, i);
+    if (op->kind == 'C' && !strcmp(op->path, idx))
+      index_closed = true;
+    assert(op->kind != 'N');
+  }
+  assert(index_closed);
+  assert(recovery_test_exists(fake, wav) && recovery_test_exists(fake, idx));
+  mc100_fake_io_destroy(fake);
+
+  fake = mc100_fake_io_create(UINT64_C(100000000));
+  assert(fake != NULL);
+  create_terminal_candidate(fake, 0x73, ".wav.part", ".idx.part", false,
+                            base, wav, idx);
+  mc100_io_t io = *mc100_fake_io_ops();
+  io.close = fail_both_closes;
+  faulting_close_calls = 0;
+  assert(mc100_recover(&io, fake, 30000, recovery_test_now, &now,
+                       &report) == MC100_IO);
+  assert(faulting_close_calls == 2);
   mc100_fake_io_destroy(fake);
 }
 
@@ -420,8 +644,14 @@ int main(void) {
   second_run_validates_without_copying();
   interrupted_temporary_output_is_never_overwritten();
   deadline_is_injected_and_nonblocking();
+  deadline_stops_directory_visit_at_first_expired_entry();
+  deadline_is_checked_after_empty_candidate_list();
+  deadline_crossed_during_sync_prevents_recovered_publication();
+  deadline_crossed_during_close_prevents_final_publication();
+  deadline_between_final_renames_stops_second_publication();
   finalized_naming_states_converge_without_copy();
   complete_history_uses_the_fast_path();
+  quick_final_closes_index_after_wav_close_error();
   completed_incident_remains_partial();
   corrupt_incident_header_recovers_trusted_pcm();
   reserved_slots_stay_reusable_without_growth();

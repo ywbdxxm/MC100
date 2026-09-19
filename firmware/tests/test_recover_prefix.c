@@ -118,53 +118,65 @@ static void put_u32(uint8_t *p, uint32_t value) {
     p[i] = (uint8_t)(value >> (i * 8));
 }
 
-static void put_u64(uint8_t *p, uint64_t value) {
-  for (unsigned i = 0; i < 8; ++i)
-    p[i] = (uint8_t)(value >> (i * 8));
-}
-
 static void metadata_fuzz_10000(void) {
   const uint8_t boot[16] = {0x33};
   char base[MC100_PATH_BYTES], wav[MC100_PATH_BYTES], idx[MC100_PATH_BYTES];
+  char recovered[MC100_PATH_BYTES];
   recovery_test_base(base, boot, 5, 1);
   recovery_test_path(wav, base, ".wav.part");
   recovery_test_path(idx, base, ".idx.part");
+  recovery_test_path(recovered, base, ".recovered.wav");
   mc100_index_header_t header = claimed_header(boot, 5, 1);
-  uint8_t pcm[64];
-  memset(pcm, 0x6c, sizeof(pcm));
-  uint8_t header_bytes[MC100_INDEX_HEADER_BYTES];
-  assert(mc100_index_header_encode(header_bytes, &header) == MC100_OK);
-  mc100_index_record_t record = block_record(&header, 0, 0, pcm, sizeof(pcm));
-  uint8_t record_bytes[MC100_INDEX_RECORD_BYTES];
-  assert(mc100_index_encode(record_bytes, &record) == MC100_OK);
+  uint8_t pcm[4 * 64 + MC100_PCM_BLOCK_BYTES];
+  for (size_t i = 0; i < sizeof(pcm); ++i)
+    pcm[i] = (uint8_t)(i * 29u + 7u);
 
   uint32_t seed = UINT32_C(0x6d633130);
   for (size_t case_index = 0; case_index < 10000; ++case_index) {
+    size_t prefix_count = 1 + fuzz_next(&seed) % 4;
+    size_t prefix_bytes = prefix_count * 64;
+    unsigned field = (unsigned)(case_index % 3);
+    uint32_t varied_length =
+        2 + 2 * (fuzz_next(&seed) % (MC100_PCM_BLOCK_BYTES / 2));
+    size_t source_bytes =
+        prefix_bytes + (field == 1 ? varied_length : 64);
+    size_t expected_bytes =
+        prefix_bytes + (field == 1 ? varied_length : 0);
+    mc100_index_record_t records[5];
+    for (size_t i = 0; i < prefix_count; ++i)
+      records[i] = block_record(&header, i, i * 64, pcm + i * 64, 64);
+    records[prefix_count] =
+        block_record(&header, prefix_count, prefix_bytes, pcm + prefix_bytes,
+                     field == 1 ? varied_length : 64);
+    if (field == 0) {
+      uint64_t offset_delta = 2 + 2 * (fuzz_next(&seed) % 32);
+      records[prefix_count].pcm_offset += offset_delta;
+      records[prefix_count].first_source_sample += offset_delta / 2;
+    } else if (field == 2) {
+      records[prefix_count].journal_seq += 1 + fuzz_next(&seed) % 16;
+    }
+
     mc100_fake_io_t *fake = mc100_fake_io_create(UINT64_C(1048576));
     assert(fake != NULL);
-    recovery_test_wav(fake, wav, pcm, sizeof(pcm), sizeof(pcm), 0);
-    size_t tail = fuzz_next(&seed) % (3 * MC100_INDEX_RECORD_BYTES + 1);
-    mc100_file_t file = recovery_test_create(
-        fake, idx, MC100_INDEX_HEADER_BYTES + tail);
-    recovery_test_write(fake, file, 0, header_bytes, sizeof(header_bytes));
-    if (tail) {
-      uint8_t mutated[MC100_INDEX_RECORD_BYTES];
-      memcpy(mutated, record_bytes, sizeof(mutated));
-      put_u64(mutated + 8, fuzz_next(&seed) % (MC100_INDEX_MAX_RECORDS + 2u));
-      put_u64(mutated + 16,
-              ((uint64_t)fuzz_next(&seed) << 32) | fuzz_next(&seed));
-      put_u32(mutated + 32, fuzz_next(&seed) % (MC100_PCM_BLOCK_BYTES + 4u));
-      put_u32(mutated + 60, mc100_crc32(mutated, 60));
-      size_t count = tail < sizeof(mutated) ? tail : sizeof(mutated);
-      recovery_test_write(fake, file, MC100_INDEX_HEADER_BYTES, mutated, count);
-    }
-    recovery_test_finish(fake, file);
+    recovery_test_wav(fake, wav, pcm, source_bytes, source_bytes, 0);
+    size_t record_count = prefix_count + 1;
+    size_t tail = fuzz_next(&seed) % MC100_INDEX_RECORD_BYTES;
+    recovery_test_idx(fake, idx, &header, records, record_count,
+                      record_count * MC100_INDEX_RECORD_BYTES + tail);
     uint64_t now = 0;
     mc100_recovery_report_t report;
     mc100_result_t result = mc100_recover(mc100_fake_io_ops(), fake, 30000,
                                           recovery_test_now, &now, &report);
     assert(result == MC100_OK);
-    assert(report.recovered == 0 && report.timed_out == 0);
+    assert(report.recovered == 1 && report.timed_out == 0);
+    assert(report.valid_pcm_bytes == expected_bytes);
+    size_t recovered_size = 0;
+    const uint8_t *recovered_bytes =
+        mc100_fake_io_bytes(fake, recovered, &recovered_size);
+    assert(recovered_bytes != NULL);
+    assert(recovered_size == MC100_WAV_HEADER_BYTES + expected_bytes);
+    assert(memcmp(recovered_bytes + MC100_WAV_HEADER_BYTES, pcm,
+                  expected_bytes) == 0);
     mc100_fake_io_destroy(fake);
   }
 }
@@ -221,6 +233,6 @@ int main(void) {
   invalid_inputs_are_reported_and_preserved();
   metadata_fuzz_10000();
   puts("recover_prefix: first-bad-block stop, torn tail, originals preserved, "
-       "10000 fixed-seed metadata cases PASS");
+       "10000 valid-prefix offset/length/count cases PASS");
   return 0;
 }

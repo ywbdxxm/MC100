@@ -24,6 +24,7 @@ typedef struct {
 } scan_t;
 
 typedef struct {
+  recovery_t *recovery;
   char cursor[MC100_PATH_BYTES];
   char next[MC100_PATH_BYTES];
   bool found;
@@ -100,6 +101,9 @@ static bool candidate_base(const char *path, char out[MC100_PATH_BYTES]) {
 
 static mc100_result_t next_visit(void *ctx, const char *path) {
   next_candidate_t *candidate = ctx;
+  mc100_result_t result = deadline(candidate->recovery);
+  if (result != MC100_OK)
+    return result;
   char base[MC100_PATH_BYTES];
   if (!candidate_base(path, base) || strcmp(base, candidate->cursor) <= 0)
     return MC100_OK;
@@ -114,11 +118,15 @@ static mc100_result_t next_base(recovery_t *recovery, const char *cursor,
                                 char next[MC100_PATH_BYTES], bool *found) {
   next_candidate_t candidate;
   memset(&candidate, 0, sizeof(candidate));
+  candidate.recovery = recovery;
   memcpy(candidate.cursor, cursor, strlen(cursor) + 1);
   mc100_result_t result = deadline(recovery);
   if (result != MC100_OK)
     return result;
   result = recovery->io->list(recovery->io_ctx, next_visit, &candidate);
+  if (result != MC100_OK)
+    return result;
+  result = deadline(recovery);
   if (result != MC100_OK)
     return result;
   *found = candidate.found;
@@ -428,6 +436,9 @@ static mc100_result_t create_recovered(recovery_t *recovery, const char *base,
     (void)recovery->io->close(recovery->io_ctx, output);
   if (result != MC100_OK)
     return result;
+  result = deadline(recovery);
+  if (result != MC100_OK)
+    return result;
   return recovery->io->rename_no_replace(recovery->io_ctx, temporary,
                                          destination);
 }
@@ -588,17 +599,24 @@ static mc100_result_t process_base(recovery_t *recovery, const char *base) {
     if (quick == MC100_OK) {
       mc100_result_t closed = recovery->io->close(recovery->io_ctx, wav);
       wav = NULL;
-      if (closed == MC100_OK)
-        closed = recovery->io->close(recovery->io_ctx, index);
+      mc100_result_t index_closed = recovery->io->close(recovery->io_ctx, index);
       index = NULL;
+      if (closed == MC100_OK)
+        closed = index_closed;
       if (closed != MC100_OK)
         return closed;
-      if (has_wav_part)
-        closed = recovery->io->rename_no_replace(recovery->io_ctx, wav_part,
-                                                 wav_final);
-      if (closed == MC100_OK && has_idx_part)
-        closed = recovery->io->rename_no_replace(recovery->io_ctx, idx_part,
-                                                 idx_final);
+      if (has_wav_part) {
+        closed = deadline(recovery);
+        if (closed == MC100_OK)
+          closed = recovery->io->rename_no_replace(recovery->io_ctx, wav_part,
+                                                   wav_final);
+      }
+      if (closed == MC100_OK && has_idx_part) {
+        closed = deadline(recovery);
+        if (closed == MC100_OK)
+          closed = recovery->io->rename_no_replace(recovery->io_ctx, idx_part,
+                                                   idx_final);
+      }
       if (closed == MC100_NOT_READY) {
         report_invalid(recovery->report);
         return MC100_OK;
