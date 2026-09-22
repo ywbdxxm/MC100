@@ -1,6 +1,6 @@
 # MC100 原理图功能与电气复核
 
-复核日期：2026-09-08。设计依据：立创 EDA 专业版云工程 `MC100` 当前五页原理图及已完成的原理图/PCB 网络对账。本文是审查结果，不是样机测试合格证；本次没有修改 EDA 电路。
+复核日期：2026-09-08。本文是基于当日 EasyEDA 实时读取形成的历史审查记录；当前硬件依据改以仓库 `hardware/` 下原理图 PDF 快照为准。原始工程和评审缓存不在仓库，本文不是样机测试合格证。
 
 **结论：主控、充电、PDM 采音、SDMMC 存储的架构具备实现目标的基础，未发现已核对引脚的错接、短路或漏接。明确的功能限制是关机文件完整性；充电计时、USB 输入和供电余量仍有具体待验证项。麦克风接线未发现明确错误，F02 属于资料澄清与样机验证，不应与已确认的硬件功能限制等同。所有功能的整机验收仍须实测。**
 
@@ -100,7 +100,7 @@ BQ24073 原表的约 0 °C / 50 °C 温度说明针对 Vishay Type 2、R25=10 k�
 | 充电中/充满状态指示 | 当前没有专用状态通道 | PGOOD#/CHG# 均未连接；不能把 GPIO21 的系统 LED 当作可靠充电状态灯 |
 | 单次充电工作 24 小时 | 未证实 | 若电池为 1200 mAh、可用容量按 80%，平均电池电流上限为 40 mA；现有设计目标 35 mA 仍须覆盖真实语音占比和 SD 卡实测 |
 
-当前未提供 MC100 固件工程和已验证固件版本，因此本次没有固件构建、刷机、录音、温升或续航测试。S7 使用现有设计文档引用的 ESP-IDF v6.0.2 官方资料核对硬件要求，不代表固件已经选用该版本。
+当前 PDF 评审不替代固件、刷机、录音、温升或续航证据。S7 的历史引用使用 ESP-IDF v6.0.2 官方资料；项目实际构建锁定 ESP-IDF v6.1，不能把历史资料版本当成固件版本。
 
 ## 4. EDA 检查结果
 
@@ -134,12 +134,12 @@ P4 已通过页面 UUID 直接读取图签：`Name`、`Drawed`、`Description` �
 
 | 编号 | 精确资料/版本 | 本次相关物理 PDF 页 |
 | --- | --- | --- |
-| S1 | [TI TLV757P，SBVS322C，2024-03](../docs/PMIC/TLV757P.pdf)；按 DBV 封装列取值 | 3-6、14 |
-| S2 | [钰太 ZTS6872SE，DS-1.6](../docs/MIC/C6E5017425694CD9DA32466A7E3CEEEF.pdf) | 1-4 |
-| S3 | [ESP32-S3 芯片规格书，中文 v2.2](../docs/ESP32-S3/esp32-s3_datasheet_cn.pdf) | 62，表 5-4 |
-| S4 | [TI BQ2407x，ZHCSIF0N，2021-10](../docs/PMIC/bq2407x.pdf)；按 BQ24073 列取值 | 6、8-9、13-14、21、28-29、34 |
-| S5 | [ESP32-S3-MINI-1/MINI-1U，中文 v1.7](../docs/ESP32-S3/esp32-s3-mini-1_mini-1u_datasheet_cn.pdf)；模组管脚为此前同日已复核依据 | 10-11，表 3-1 |
-| S6 | [ESP32-S3 技术参考手册，中文 v1.8](../docs/ESP32-S3/esp32-s3_technical_reference_manual_cn.pdf) | 998、1006、1195 |
+| S1 | [TI TLV757P，SBVS322C，2024-03](../../../docs/PMIC/TLV757P.pdf)；按 DBV 封装列取值 | 3-6、14 |
+| S2 | [钰太 ZTS6872SE，DS-1.6](../../../docs/MIC/C6E5017425694CD9DA32466A7E3CEEEF.pdf) | 1-4 |
+| S3 | [ESP32-S3 芯片规格书，中文 v2.2](../../../docs/ESP32-S3/esp32-s3_datasheet_cn.pdf) | 62，表 5-4 |
+| S4 | [TI BQ2407x，ZHCSIF0N，2021-10](../../../docs/PMIC/bq2407x.pdf)；按 BQ24073 列取值 | 6、8-9、13-14、21、28-29、34 |
+| S5 | [ESP32-S3-MINI-1/MINI-1U，中文 v1.7](../../../docs/ESP32-S3/esp32-s3-mini-1_mini-1u_datasheet_cn.pdf)；模组管脚为此前同日已复核依据 | 10-11，表 3-1 |
+| S6 | [ESP32-S3 技术参考手册，中文 v1.8](../../../docs/ESP32-S3/esp32-s3_technical_reference_manual_cn.pdf) | 998、1006、1195 |
 | S7 | [Espressif ESP-IDF v6.0.2，SD Pull-up Requirements](https://docs.espressif.com/projects/esp-idf/en/v6.0.2/esp32s3/api-reference/peripherals/sd_pullup_requirements.html)；读取同版本官方 RST 源文件，按 ESP32-S3 条件解释 | 总要求、SOC_SDMMC_USE_GPIO_MATRIX / esp32s3 分支 |
 
 S6 第 998 页的下采样公式与第 1006 页位定义存在不一致；本次以第 1006 页明确的 `0 -> 64、1 -> 128` 位定义核对 64 倍能力，不依据第 998 页公式推导寄存器配置。固件应使用已选 SDK 的对应驱动，并实测输出采样率。

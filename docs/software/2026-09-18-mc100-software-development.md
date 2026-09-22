@@ -8,9 +8,9 @@
 
 **Tech Stack:** ESP32-S3-MINI-1-N8、项目选定 ESP-IDF v6.1、C11、FreeRTOS、I2S0 PDM RX、SDMMC 1-bit/FatFs、libfvad 候选、CMake/CTest、Linux ASan/UBSan、Windows 本地开发。
 
-**Spec:** [MC100 软件架构设计](../specs/2026-09-18-mc100-software-architecture-design.md)。执行时同时阅读[硬件依据与验收矩阵](../../MC100-VALIDATION.md)，不能只读单个任务。
+**Spec:** [MC100 软件架构设计](2026-09-18-mc100-software-architecture-design.md)。执行时同时阅读[硬件依据与验收矩阵](../MC100-VALIDATION.md)，不能只读单个任务。
 
-**当前执行范围（用户更新）：** 暂无 MC100 板子，先执行 T01–T12 的完整无板软件开发；T13–T14 保留为到板后的验证计划，不作为本轮软件目标的完成条件。进度和实际证据见[开发进度](../../MC100-DEVELOPMENT-STATUS.md)。软件阶段仍须满足全部软件测试、目标构建与打包条件，不能仅完成可编译骨架即放行。
+**当前执行范围（用户更新）：** MC100 已连接指定 COM7，先完成录音到 SD 的大功能，再继续 VAD、恢复和产品化优化；T13–T14 的完整硬件放行仍需单独证据。进度和实际证据见[开发进度](../MC100-DEVELOPMENT-STATUS.md)。不能仅完成可编译骨架即放行。
 
 ## Global Constraints
 
@@ -417,7 +417,7 @@ i2s_pdm_rx_slot_config_t slot =
 /* SELECT=GND 的 slot_mask 是 H02 试验参数，不从能编译推断采样正确。 */
 ```
 
-- [ ] SDMMC host 配置 20 MHz、slot.width=1、正确 CLK/CMD/D0；V1 支持 FAT32，启用至少 128 字符的长文件名并核对其工作区预算，挂载失败不得 format。实现 T05 io 适配：FatFs 的实际读写长度、`f_sync`、`f_truncate`、独占创建、不覆盖重命名、目录枚举和空间统计。不得混用独立文件描述符绕过 Storage 所有权。
+- [ ] SDMMC host 配置 20 MHz、slot.width=1、正确 CLK/CMD/D0；支持 FAT32 与已批准的 64 GB exFAT EVT 卡，启用至少 128 字符的长文件名并核对其工作区预算，挂载失败不得 format。实现 T05 io 适配：FatFs 的实际读写长度、`f_sync`、`f_truncate`、独占创建、不覆盖重命名、目录枚举和空间统计。不得混用独立文件描述符绕过 Storage 所有权。
 - [ ] 对已选预分配路径做单独 target 编译/链接 probe；若 FF_USE_EXPAND=0，使用经验证的 f_lseek 扩展和长度检查，不能使用未链接的 helper。宿主碎片镜像先测试预分配不足；真实卡延迟明确留给 H03。
 - [ ] 配置 ADC 校准、GPIO21、CD 输入和 USB 日志。卡有效电平作为明确 EVT 配置候选、初始 low-active，但在 H01 前不得标为确认；缺少实测时构建元数据标 `board_io_verified=false`，发布门禁检查此字段。
 - [ ] Run：`powershell -File firmware/tools/build.ps1 -Profile evt`；脚本 profile 列表限定 host/evt/release，未知 profile 失败。检查 SDK API/链接/静态内存结果，通过后本地提交 `feat: add MC100 ESP-IDF peripheral adapters`，硬件运行项仍 NOT_RUN。
@@ -501,7 +501,7 @@ void app_main(void) {
 
 **Files:** 创建 `firmware/tools/hil_runner.py`、`docs/reports/evt-bringup.md`、`docs/reports/card-matrix.csv`、`docs/reports/battery-calibration.csv`；必要修改 `mc100_board` 与 EVT 配置，任何修复都新增 host 回归。
 
-**Interfaces:** HIL runner 接受明确设备端口/板号/固件哈希/测试 ID/输出目录；只对指定设备发送受限诊断命令。首次烧录由操作者按[烧录指南](../../../MC100-PROGRAMMING.md)确认 TP/供电，自动工具不得猜测端口或 GPIO 测试点。
+**Interfaces:** HIL runner 接受明确设备端口/板号/固件哈希/测试 ID/输出目录；只对指定设备发送受限诊断命令。首次烧录由操作者按[烧录指南](../hardware/MC100-PROGRAMMING.md)确认 TP/供电，自动工具不得猜测端口或 GPIO 测试点。
 
 - [ ] 记录板快照哈希、板号、装配/短路检查，按 H01 测电源、EN、ROM 下载、芯片/Flash、校验和应用日志；失败立即停在该关卡，不启动耗电/写卡压力。
 - [ ] H02 用已知音调/脉冲检查 PDM CLK/DATA、有效槽、40 ms 起始丢弃与采样率；把测得 slot/polarity 配置写入 BSP，并对所有已跑 host/target 回归。保存原始授权音频和仪器设置，不只写“声音正常”。

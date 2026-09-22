@@ -32,6 +32,13 @@ Use an activated native C11 compiler and CMake/Ninja/CTest environment (on Windo
 a Visual Studio Developer PowerShell with MSVC C11 support is suitable). Do not use
 the ESP32 cross-compiler as the host compiler. From the repository root:
 
+On Windows this project has two separate tool tuples. Host tests require the MSVC
+Developer environment (`vcvars64.bat`) so that `cl.exe`, the Windows SDK and standard
+headers resolve correctly. The ESP-IDF profile must not replace that environment; when
+both are needed, prepend only the validated IDF CMake/Ninja/Python paths. Run from
+`cmd.exe`/PowerShell, not Git Bash, because `MSYSTEM`/`MINGW_*` causes ESP-IDF activation
+to reject the shell.
+
 ```powershell
 pwsh -File firmware/tools/test-host.ps1 -Clean
 pwsh -File firmware/tests/test_build_tools.ps1
@@ -57,6 +64,14 @@ From the same activated ESP-IDF terminal:
 ```powershell
 pwsh -File firmware/tools/build.ps1 -Profile evt -Clean
 ```
+
+The target tuple is ESP-IDF v6.1 at the revision recorded in
+`dependencies.lock.json`, with its matching IDF-owned Python, tools root, CMake, Ninja
+and ESP32-S3 compiler. Activate the installation-specific v6.1 PowerShell profile
+before running the script. A generic `esp-idf/export.ps1` is not sufficient on this
+machine when it resolves Python from uv; do not install or mix another SDK. Do not run
+bare `idf.py build`: it bypasses the output-directory and SDK/configuration guardrails
+in `firmware/tools/build.ps1`.
 
 The script invokes the validated installation's Python and `idf.py` with absolute
 project, output, `SDKCONFIG`, defaults and target arguments. Outputs and generated

@@ -12,7 +12,7 @@
 - Flash 读取识别为 8 MB，Quad，芯片配置电压 3.3 V；这不是供电实测值。
 - 覆盖写入前完整读出 8,388,608 byte Flash 备份，保存在忽略目录 `firmware/out/device-com7/pre-evt-flash-8mb.bin`。
 - 备份 SHA256：`65CB41E20E59DCB4211076D7F170DF2565CD731ABA2A5980DE0BB378E494A0C9`。
-- 最新统一电脑测试17/17通过；C核心14套ASan及UBSan共28/28通过。
+- 最新统一电脑测试19/19通过；C核心14套ASan及UBSan共28/28通过。
 - 测试固件已在COM7烧录，bootloader/partition/app逐项写入哈希校验通过；应用USB命令正常。
 - SD卡初始化与扇区读取成功：124,735,488个512-byte扇区，第一MBR分区type=0x07/start=32768，卷启动扇区EXFAT签名成立。用户确认是新购闪迪64GB。原FAT32固件挂载返回FatFs13（FR_NO_FILESYSTEM），不是没有卡、也不是没有格式化。
 - 用户已选择增加exFAT支持，保留现有格式/数据。项目内兼容配置独立构建通过，14个FatFs消费者配置审计通过，C/C++ ABI探针通过；全局SDK跟踪文件保持干净。

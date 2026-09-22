@@ -1,29 +1,33 @@
 # MC100
 
-The authoritative MC100 schematic and PCB are stored in the EasyEDA Pro cloud project named `MC100`.
+MC100 是基于 ESP32-S3-MINI-1-N8 的便携录音设备软件与硬件记录仓库。硬件依据是 `hardware/` 中 2026-09-18 导出的原理图和 PCB PDF 快照，仓库不保存或上传任何嘉立创/EasyEDA 工程文件；`PCB1.epro2` 已删除且不得恢复。
 
-## Software development baseline — 2026-09-18
+## 当前状态
 
-The user-provided [schematic PDF](hardware/SCH_Schematic1_2026-09-18.pdf) and [PCB PDF](hardware/PCB_PCB1_2026-09-18.pdf) are the hardware snapshots used for the new software plan. All five schematic pages and seven PCB pages were inspected. This is not a fresh native EDA DRC or manufacturing release; snapshot hashes, source locators, and stale schematic annotations are recorded in the validation document below.
+便携 C 核心、存储/录音组件和手动 USB 台架固件已实现。已在指定 COM7、USB 供电、64 GB exFAT 卡上完成采集、WAV/索引写入、轮换和 CRC 读回；这不等于声学质量、电池寿命或任意掉电恢复通过。
 
-- [软件架构设计](docs/superpowers/specs/2026-09-18-mc100-software-architecture-design.md): portable C core, State/Audio/Storage ownership, two-second prerecord, VAD, bounded buffers, WAV/CRC journal, recovery, and hardware limits.
-- [完整软件开发计划](docs/superpowers/plans/2026-09-18-mc100-software-development.md): T01–T12 develop and test without a board; T13–T14 cover board bring-up and qualification.
-- [硬件依据、需求追踪与验收矩阵](docs/MC100-VALIDATION.md): confirmed connections, software tests, and H01–H08 hardware gates.
+当前明确未完成：T06 扇区故障门禁阻塞，T07 VAD 评估未完成，产品 LISTEN/VAD 主流程尚未交付；尚无声学、电池、真实掉电和长期耐久放行。运行时目前尚未调用 `mc100_recover`。
 
-Status: portable recording/storage core and a manual USB bench firmware are implemented. Board bring-up is underway on the explicitly authorized COM7, USB powered without a battery. See [development status](docs/MC100-DEVELOPMENT-STATUS.md) and [actual bench evidence](docs/reports/2026-09-19-evt-recording.md). The software baseline uses the project's ESP-IDF v6.1 and ESP32-S3-MINI-1-N8 (8 MB Flash, no PSRAM). A successful host test or cross-build is not proof of acoustic quality, SD power-loss tolerance, or battery life. Automatic VAD/product lifecycle and full qualification are not yet complete.
+## 构建与测试
 
-## Existing hardware reviews
+主机测试和目标构建使用不同的 Windows 工具环境，不能混用：
 
-Current hardware documentation: [MC100-HARDWARE-DESIGN.md](MC100-HARDWARE-DESIGN.md), reconciled with the live schematic and PCB on 2026-09-08. The board uses a slide switch to control the LDO enable pin; the earlier GEK100 push-button control is no longer present. Firmware behavior and endurance figures in the document remain targets until validated on hardware.
+- Host：使用 Visual Studio Developer PowerShell 的 MSVC C11、Windows SDK、CMake/Ninja/CTest。先建立 MSVC 环境，再运行 `pwsh -File firmware/tools/test-host.ps1 -Clean`；不要让 ESP-IDF profile 覆盖 MSVC 的 SDK 路径。
+- Target：使用项目锁定的 ESP-IDF v6.1、对应 IDF Python/工具根目录、ESP32-S3 编译器、CMake 和 Ninja。激活匹配的安装专用 PowerShell profile 后运行 `pwsh -File firmware/tools/build.ps1 -Profile evt -Clean`。不要裸跑 `idf.py build`，也不要混用 uv Python 或另一套 SDK。
 
-Current schematic review: [MC100-SCHEMATIC-REVIEW.md](MC100-SCHEMATIC-REVIEW.md). Open items cover recording integrity at switch-off, charge-timer tolerance, USB input inrush, and LDO operating margins. No definite microphone wiring fault was identified; its combined input/output level specification is tracked as a documentation clarification and prototype measurement item, without requiring a circuit change on that evidence alone. The selected battery is confirmed to have three wires and a 10 kOhm NTC. All five schematic DRC runs reported zero violations; P4 still has a title-block warning in the strict check.
+两类命令都从 `cmd.exe`/PowerShell 启动，不从 Git Bash 启动；`MSYSTEM`/`MINGW_*` 会使 ESP-IDF 拒绝激活。canonical 目标输出为 `firmware/out/target/`，IDE 的 clangd 编译数据库也指向该目录。
 
-Current PCB review: [MC100-PCB-REVIEW.md](MC100-PCB-REVIEW.md), refreshed from the live design on 2026-09-09. All five schematic pages and 234 PCB pad records match across 56 placements, and native DRC passed. The new 01:03 Gerber confirms the corrected four-sector microphone paste opening and 0.60 mm NPTH. USB now runs on Inner2 over Inner1 ground; the previous mid-route USB/SD reference-plane split crossings are resolved. Remaining layout recommendations cover local USB via clearances and nearby ground vias, R22 at the card end, C20 far from the SD supply pin, and C8/C9 near the LDO. The previous six silkscreen-to-pad bounding-box warnings did not reproduce in actual Gerber geometry. Fabricator stackup and final assembly/stencil matching remain pending; this is not a manufacturing release. The current effective routing has 255 line segments, 4 arcs, 78 standalone vias, 4 enumerable pours, and 6 static copper fills. End-of-review reads confirmed the inspected geometry and rules were unchanged.
+## 文档入口
 
-Programming guide: [MC100-PROGRAMMING.md](MC100-PROGRAMMING.md). The present connections support native USB ROM download with SW1 on and factory-default download eFuses. TP3 is GPIO0/BOOT, TP4 is EN/RESET, TP1 is ground, and TP2 is 3V3 for measurement only. All four bottom testpoints have exported solder-mask openings. UART0 TX/RX are not brought out; application logging needs USB Serial/JTAG console configuration. No physical flashing or MC100 firmware build was tested in this review.
+- [软件架构设计](docs/software/2026-09-18-mc100-software-architecture-design.md)
+- [软件开发计划](docs/software/2026-09-18-mc100-software-development.md)
+- [整理计划](docs/software/2026-09-22-mc100-repo-cleanup.md)
+- [设计裁决](docs/decisions.md)
+- [硬件依据与验证矩阵](docs/MC100-VALIDATION.md)
+- [开发状态](docs/MC100-DEVELOPMENT-STATUS.md)
+- [硬件设计](docs/hardware/MC100-HARDWARE-DESIGN.md)、[PCB 复核](docs/hardware/MC100-PCB-REVIEW.md)、[原理图复核](docs/hardware/MC100-SCHEMATIC-REVIEW.md)、[烧录指南](docs/hardware/MC100-PROGRAMMING.md)
+- [实板记录](docs/reports/2026-09-19-evt-recording.md)
 
-SMT service compatibility was checked against the domestic JLC SMT catalog on 2026-09-08 for all 25 distinct BOM part numbers. U3 / C2913206 and U4 / C42372687 are explicitly marked standard-SMT-only; the remaining 23 part numbers (50 placements) have no such restriction label. Full assembly with the current U3/U4 therefore needs the standard service. See hardware design section 12.4 for the complete mapping and its order-validation limits. Basic/extended library class is separate from economic/standard assembly service.
+## 证据与边界
 
-When documentation conflicts with the live EasyEDA schematic or PCB, inspect the current EDA design and update the documentation. Do not use an older document snapshot to infer the current components, pin assignments, or routing status.
-
-This directory is intentionally clean. Keep current project documentation, firmware sources/tests, hardware snapshots, and released manufacturing exports in their designated directories. Do not retain EasyEDA screenshots, intermediate PCB dumps, routing trials, rollback journals, build caches, private audio, or temporary inspection logs.
+不可再生的 COM7 实板证据和语料选择清单归档在 `evidence/`，由 `evidence/SHA256SUMS` 校验。构建缓存、私有录音、SD 卡内容和 EasyEDA 工程不纳入版本库。软件测试或交叉编译通过只证明对应软件层，不代表产品硬件放行；H01-H08、声学、功耗、掉电和制造风险必须以独立报告关闭。

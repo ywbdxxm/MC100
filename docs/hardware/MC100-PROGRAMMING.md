@@ -1,10 +1,10 @@
 # MC100 首次烧录与强制下载
 
-核对日期：2026-09-08。依据当前立创 EDA 云工程 MC100 的五页原理图、PCB1，以及 10:34:04 导出的制造文件。U3 为 ESP32-S3-MINI-1-N8 / C2913206，8 MB Flash，无 PSRAM。
+核对日期：2026-09-08。本文是基于当日 EasyEDA 读取形成的历史烧录接线记录；当前硬件依据改以仓库 PDF 快照为准。U3 为 ESP32-S3-MINI-1-N8，8 MB Flash，无 PSRAM。
 
 **本板具备 ESP32-S3 原生 USB ROM 下载所需的供电、数据线、GPIO0 和 EN 连接，不需要另加 CH340/CP2102，也不需要先烧入用户固件才能进入 ROM 下载。这个结论以模组出厂默认下载相关 eFuse、正确贴装和正常供电为前提。** 当前尚无实板烧录验证，USB 参考层分割及麦克风钢网问题见 [PCB 复核报告](MC100-PCB-REVIEW.md)，不能把下载接线成立等同于整板已放行。
 
-SMT 只是完成装配。还需要烧入适配 MC100 引脚和外设的固件，才能录音、写卡和实现自动语音触发；本次未发现或验证 MC100 的可烧录固件产物。
+SMT 只是完成装配。还需要烧入适配 MC100 引脚和外设的固件，才能录音、写卡和实现自动语音触发；当前项目已有手动 USB 台架固件，但自动产品主流程仍未完成。
 
 ## 1. 当前下载接线
 
@@ -74,7 +74,7 @@ GPIO19/20 应保留给 USB。若应用改变 USB 引脚、控制器或低功耗�
 
 | 编号 | 资料 | 页码 / 相关内容 |
 | --- | --- | --- |
-| S1 | [ESP32-S3-MINI-1/MINI-1U，中文 v1.7](../docs/ESP32-S3/esp32-s3-mini-1_mini-1u_datasheet_cn.pdf) | 10-11，MINI-1 模组引脚定义 |
-| S2 | [ESP32-S3 数据手册，中文 v2.2](../docs/ESP32-S3/esp32-s3_datasheet_cn.pdf) | 32-33，默认上下拉、启动模式、至少 3 ms 保持时间；54，USB Serial/JTAG |
-| S3 | [ESP32-S3 技术参考手册，中文 v1.8](../docs/ESP32-S3/esp32-s3_technical_reference_manual_cn.pdf) | 1171，USB 烧录、CDC/JTAG、主机复位/下载 |
-| S4 | [BQ2407x，ZHCSIF0N](../docs/PMIC/bq2407x.pdf)，使用 BQ24073 | 17，Power Path 与无电池系统供电 |
+| S1 | [ESP32-S3-MINI-1/MINI-1U，中文 v1.7](../../../docs/ESP32-S3/esp32-s3-mini-1_mini-1u_datasheet_cn.pdf) | 10-11，MINI-1 模组引脚定义 |
+| S2 | [ESP32-S3 数据手册，中文 v2.2](../../../docs/ESP32-S3/esp32-s3_datasheet_cn.pdf) | 32-33，默认上下拉、启动模式、至少 3 ms 保持时间；54，USB Serial/JTAG |
+| S3 | [ESP32-S3 技术参考手册，中文 v1.8](../../../docs/ESP32-S3/esp32-s3_technical_reference_manual_cn.pdf) | 1171，USB 烧录、CDC/JTAG、主机复位/下载 |
+| S4 | [BQ2407x，ZHCSIF0N](../../../docs/PMIC/bq2407x.pdf)，使用 BQ24073 | 17，Power Path 与无电池系统供电 |

@@ -4,9 +4,6 @@
 Thumbs.db
 Desktop.ini
 
-# EasyEDA agent/version test artifacts (the design source is PCB1.epro2)
-/.easyeda/version-test-*/
-
 # ESP-IDF generated output
 /firmware/build/
 /firmware/out/
@@ -14,6 +11,9 @@ Desktop.ini
 /firmware/**/__pycache__/
 /firmware/sdkconfig
 /firmware/sdkconfig.old
+
+# Local hardware and corpus evidence (hash manifest is retained locally)
+/evidence/
 
 # Temporary and log files
 *.bak
