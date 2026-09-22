@@ -85,6 +85,7 @@ add_library(mc100_audio STATIC
     ../components/mc100_audio/preroll.c
     ../components/mc100_audio/stream.c
     ../components/mc100_audio/frame_assembler.c
+    ../components/mc100_audio/vad_fixed.c
 )
 target_include_directories(mc100_audio PUBLIC
     ../components/mc100_audio/include
@@ -97,6 +98,10 @@ foreach(name frame_assembler preroll_handoff queue_full capture_gap)
     mc100_host_checks(test_${name})
     add_test(NAME ${name} COMMAND test_${name})
 endforeach()
+add_executable(test_vad_fixed ../tests/test_vad_fixed.c)
+target_link_libraries(test_vad_fixed PRIVATE mc100_audio)
+mc100_host_checks(test_vad_fixed)
+add_test(NAME vad_fixed COMMAND test_vad_fixed)
 
 add_library(mc100_writer STATIC
     ../components/mc100_storage/writer.c
