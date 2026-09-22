@@ -1,3 +1,8 @@
+/* ============================================================================
+ * EVT_USB_BENCH — this entry point is the manual USB bench diagnostic tool,
+ * not the product firmware path. Product autonomous recording is owned by the
+ * mc100_supervisor/product_runtime path; this app is retained for EVT evidence.
+ * ========================================================================== */
 #include <stdio.h>
 #include "evt_capture.h"
 #include "freertos/FreeRTOS.h"
