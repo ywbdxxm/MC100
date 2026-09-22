@@ -65,6 +65,7 @@ add_test(NAME wave_interop COMMAND ${Python3_EXECUTABLE}
 add_library(mc100_core STATIC
     ../components/mc100_core/state.c
     ../components/mc100_core/battery_policy.c
+    ../components/mc100_core/upload_noop.c
 )
 target_include_directories(mc100_core PUBLIC ../components/mc100_core/include)
 mc100_host_checks(mc100_core)
@@ -74,6 +75,10 @@ foreach(name state battery_policy)
     mc100_host_checks(test_${name})
     add_test(NAME ${name} COMMAND test_${name})
 endforeach()
+add_executable(test_upload_noop ../tests/test_upload_noop.c)
+target_link_libraries(test_upload_noop PRIVATE mc100_core)
+mc100_host_checks(test_upload_noop)
+add_test(NAME upload_noop COMMAND test_upload_noop)
 
 add_library(mc100_audio STATIC
     ../components/mc100_audio/audio.c
