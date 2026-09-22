@@ -5,7 +5,7 @@
 ## 当前任务
 
 | Phase | 内容 | 状态 | 证据/下一步 |
-| --- | --- | --- |
+| --- | --- | --- | --- |
 | P0 | 地基整理（合并恢复、清文档、隔离台架） | IN_PROGRESS | 恢复分支已合并，恢复测试 host 通过 |
 | P1 | 40MHz + VAD 选型 spike | NOT_STARTED | throwaway，输出数据+选型结论 |
 | P2 | 产品录音循环（supervisor） | NOT_STARTED | 先出基本功能；VAD 占位 |
