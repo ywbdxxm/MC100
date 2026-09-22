@@ -1,5 +1,6 @@
 # Local editor and operating-system files
 .vscode/
+.worktrees/
 .DS_Store
 Thumbs.db
 Desktop.ini
