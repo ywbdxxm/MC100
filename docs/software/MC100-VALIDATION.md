@@ -1,8 +1,8 @@
 # MC100 硬件依据、需求追踪与验证计划
 
-日期：2026-09-18。配套：[软件架构](software/2026-09-18-mc100-software-architecture-design.md)、[开发计划](software/2026-09-18-mc100-software-development.md)。
+日期：2026-09-18。配套：[软件架构](2026-09-18-mc100-software-architecture-design.md)、[开发计划](2026-09-18-mc100-software-development.md)。
 
-软件正在按计划开发，逐项实际结果见[开发进度](MC100-DEVELOPMENT-STATUS.md)及[实板报告](reports/2026-09-19-evt-recording.md)。下文定义的是完整验收要求而非通过声明；已开始部分目标运行，H01–H08整套关卡仍未放行，不能把文档中的预期结果当成已通过。
+软件正在按计划开发，逐项实际结果见[开发进度](MC100-DEVELOPMENT-STATUS.md)及[实板报告](../reports/2026-09-19-evt-recording.md)。下文定义的是完整验收要求而非通过声明；已开始部分目标运行，H01–H08整套关卡仍未放行，不能把文档中的预期结果当成已通过。
 
 ## 1. 本次硬件开发快照
 
@@ -10,8 +10,8 @@
 
 | 文件 | 物理页数 / 字节数 | SHA256 |
 | --- | --- | --- |
-| [SCH_Schematic1_2026-09-18.pdf](../hardware/SCH_Schematic1_2026-09-18.pdf) | 5 / 410,141 | `CB88F1F4AF564E5DBBF3BEA75DD4682129A240D00CB9A40569620EBF3C80D6EE` |
-| [PCB_PCB1_2026-09-18.pdf](../hardware/PCB_PCB1_2026-09-18.pdf) | 7 / 865,741 | `71AF4557A9783C86F7AAB674D17513AAB1C18D6AF1F15544D80B18F597AB7124` |
+| [SCH_Schematic1_2026-09-18.pdf](../../hardware/SCH_Schematic1_2026-09-18.pdf) | 5 / 410,141 | `CB88F1F4AF564E5DBBF3BEA75DD4682129A240D00CB9A40569620EBF3C80D6EE` |
+| [PCB_PCB1_2026-09-18.pdf](../../hardware/PCB_PCB1_2026-09-18.pdf) | 7 / 865,741 | `71AF4557A9783C86F7AAB674D17513AAB1C18D6AF1F15544D80B18F597AB7124` |
 
 页码均指 PDF 物理页，不是图纸中的自定义编号。原理图页名依次为 P1_POWER_PATH、P2_POWER_CONTROL、P3_MCU_DEBUG、P4_USB_AUDIO、P5_SDMMC_STORAGE。PCB 第 1/2 页为正反面放置，第 3/4 页为 BOM，第 5/6 页为铜/装配视图，第 7 页为钻孔图。
 
@@ -42,7 +42,7 @@
 | SCH p2 注释 GEK100_35 / GPIO5 KEY_RAW / D4 | SW1 直接控电；GPIO5 是 SD detect | 按真实连接建 BSP |
 | SCH p5 注释 CLK/CMD/DAT0 串联阻尼 | 只有 CLK 串 R22，CMD/DAT0 直连 | 不假定不存在的硬件阻尼 |
 | 网络名 `GPIO7_LED` | 实际 GPIO21 | 保留原图，代码按 GPIO21 |
-| 9 月 8 日旧文档仍说麦克风焊膏/跨参考面问题未改 | [9 月 9 日 PCB 复核](hardware/MC100-PCB-REVIEW.md)记录已修正 | 不把过期问题重新列成当前已证实缺陷；制造仍需独立放行 |
+| 9 月 8 日旧文档仍说麦克风焊膏/跨参考面问题未改 | [9 月 9 日 PCB 复核](../hardware/MC100-PCB-REVIEW.md)记录已修正 | 不把过期问题重新列成当前已证实缺陷；制造仍需独立放行 |
 
 ## 2. 器件与 SDK 证据定位
 
@@ -57,7 +57,7 @@
 | SDK 单应用默认分区表 | 默认 factory 应用仅 1 MB | MC100 要显式受控的 8 MB Flash 分区策略 |
 | [libfvad 上游](https://github.com/dpirch/libfvad) | 候选锁定修订 `532ab666c20d3cfda38bca63abbb0f152706c369`；已读取上游头文件 | 支持 16 kHz、10/20/30 ms、mode 0–3；T07 仍需获取确切源码、校验内容并构建 |
 
-上述器件原页已复核；SDK 源码阅读不是本次完成了一次 MC100 构建。libfvad 尚未引入仓库，也没有做速度、内存或 VAD 准确率实测。更多电源/USB/器件依据见[原理图复核](hardware/MC100-SCHEMATIC-REVIEW.md)和[烧录指南](hardware/MC100-PROGRAMMING.md)。
+上述器件原页已复核；SDK 源码阅读不是本次完成了一次 MC100 构建。libfvad 尚未引入仓库，也没有做速度、内存或 VAD 准确率实测。更多电源/USB/器件依据见[原理图复核](../hardware/MC100-SCHEMATIC-REVIEW.md)和[烧录指南](../hardware/MC100-PROGRAMMING.md)。
 
 ## 3. 需求到测试的追踪矩阵
 

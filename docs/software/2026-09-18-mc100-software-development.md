@@ -8,9 +8,9 @@
 
 **Tech Stack:** ESP32-S3-MINI-1-N8、项目选定 ESP-IDF v6.1、C11、FreeRTOS、I2S0 PDM RX、SDMMC 1-bit/FatFs、libfvad 候选、CMake/CTest、Linux ASan/UBSan、Windows 本地开发。
 
-**Spec:** [MC100 软件架构设计](2026-09-18-mc100-software-architecture-design.md)。执行时同时阅读[硬件依据与验收矩阵](../MC100-VALIDATION.md)，不能只读单个任务。
+**Spec:** [MC100 软件架构设计](2026-09-18-mc100-software-architecture-design.md)。执行时同时阅读[硬件依据与验收矩阵](MC100-VALIDATION.md)，不能只读单个任务。
 
-**当前执行范围（用户更新）：** MC100 已连接指定 COM7，先完成录音到 SD 的大功能，再继续 VAD、恢复和产品化优化；T13–T14 的完整硬件放行仍需单独证据。进度和实际证据见[开发进度](../MC100-DEVELOPMENT-STATUS.md)。不能仅完成可编译骨架即放行。
+**当前执行范围（用户更新）：** MC100 已连接指定 COM7，先完成录音到 SD 的大功能，再继续 VAD、恢复和产品化优化；T13–T14 的完整硬件放行仍需单独证据。进度和实际证据见[开发进度](MC100-DEVELOPMENT-STATUS.md)。不能仅完成可编译骨架即放行。
 
 ## Global Constraints
 
@@ -534,9 +534,3 @@ void app_main(void) {
 - [ ] 无无界队列、音频热路径堆分配、跨任务文件/驱动调用、自动格式化/擦除或敏感音频日志。
 - [ ] 文档/配置/锁文件同步，报告准确区分 PASS/FAIL/NOT_RUN；未做实测不填测量数值。
 - [ ] 检查最终 diff、`git diff --check`、提交范围；保留用户硬件 PDF 和其他未提交变更，不自动推送。
-
-## 7. 当前执行入口
-
-当前状态：**DEVELOPING；T01 开始，后续完成状态以开发进度中的实测证据为准；T13–T14 等板子回来后执行。**
-
-下一项是 T01：固定 ESP32-S3-N8/ESP-IDF v6.1 的工程配置和板级能力，建立能够在电脑运行的同源测试入口。T01 的结束条件是 host board_contract 和新鲜 target 构建均通过，不是“搭了几个空文件”。之后继续 T02/T03/T04，优先形成可测试的录音完整性链路，不等待实板。

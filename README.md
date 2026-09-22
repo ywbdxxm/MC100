@@ -21,10 +21,9 @@ MC100 是基于 ESP32-S3-MINI-1-N8 的便携录音设备软件与硬件记录仓
 
 - [软件架构设计](docs/software/2026-09-18-mc100-software-architecture-design.md)
 - [软件开发计划](docs/software/2026-09-18-mc100-software-development.md)
-- [整理计划](docs/software/2026-09-22-mc100-repo-cleanup.md)
 - [设计裁决](docs/decisions.md)
-- [硬件依据与验证矩阵](docs/MC100-VALIDATION.md)
-- [开发状态](docs/MC100-DEVELOPMENT-STATUS.md)
+- [硬件依据与验证矩阵](docs/software/MC100-VALIDATION.md)
+- [开发状态](docs/software/MC100-DEVELOPMENT-STATUS.md)
 - [硬件设计](docs/hardware/MC100-HARDWARE-DESIGN.md)、[PCB 复核](docs/hardware/MC100-PCB-REVIEW.md)、[原理图复核](docs/hardware/MC100-SCHEMATIC-REVIEW.md)、[烧录指南](docs/hardware/MC100-PROGRAMMING.md)
 - [实板记录](docs/reports/2026-09-19-evt-recording.md)
 
