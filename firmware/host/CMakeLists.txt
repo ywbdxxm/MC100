@@ -129,6 +129,20 @@ target_include_directories(test_supervisor_boot PRIVATE
 target_link_libraries(test_supervisor_boot PRIVATE mc100_supervisor mc100_fake_io)
 mc100_host_checks(test_supervisor_boot)
 add_test(NAME supervisor_boot COMMAND test_supervisor_boot)
+add_executable(test_supervisor_record_open ../tests/test_supervisor_record_open.c)
+target_include_directories(test_supervisor_record_open PRIVATE
+    ../components/mc100_supervisor/include
+)
+target_link_libraries(test_supervisor_record_open PRIVATE mc100_supervisor mc100_fake_io)
+mc100_host_checks(test_supervisor_record_open)
+add_test(NAME supervisor_record_open COMMAND test_supervisor_record_open)
+add_executable(test_supervisor_record_active ../tests/test_supervisor_record_active.c)
+target_include_directories(test_supervisor_record_active PRIVATE
+    ../components/mc100_supervisor/include
+)
+target_link_libraries(test_supervisor_record_active PRIVATE mc100_supervisor mc100_fake_io)
+mc100_host_checks(test_supervisor_record_active)
+add_test(NAME supervisor_record_active COMMAND test_supervisor_record_active)
 
 foreach(name storage_writer storage_short_write rotate_15000 space_admission finalize_faults)
     add_executable(test_${name} ../tests/test_${name}.c)
