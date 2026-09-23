@@ -220,6 +220,12 @@ target_include_directories(test_driver_contract PRIVATE
 )
 mc100_host_checks(test_driver_contract)
 add_test(NAME driver_contract COMMAND test_driver_contract)
+add_executable(test_product_audio_protocol
+    ../tests/test_product_audio_protocol.c)
+target_include_directories(test_product_audio_protocol PRIVATE
+    ../components/mc100_core/include)
+mc100_host_checks(test_product_audio_protocol)
+add_test(NAME product_audio_protocol COMMAND test_product_audio_protocol)
 add_executable(test_evt_commands ../tests/test_evt_commands.c ../main/evt_commands.c)
 target_include_directories(test_evt_commands PRIVATE ../main)
 target_link_libraries(test_evt_commands PRIVATE mc100_audio mc100_writer)
