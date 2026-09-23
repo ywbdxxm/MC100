@@ -113,6 +113,23 @@ add_library(mc100_fake_io STATIC ../host/fake_io.c)
 target_include_directories(mc100_fake_io PUBLIC ../host/include)
 target_link_libraries(mc100_fake_io PUBLIC mc100_writer)
 mc100_host_checks(mc100_fake_io)
+
+add_library(mc100_supervisor STATIC
+    ../components/mc100_supervisor/supervisor.c
+)
+target_include_directories(mc100_supervisor PUBLIC
+    ../components/mc100_supervisor/include
+)
+target_link_libraries(mc100_supervisor PUBLIC mc100_core mc100_audio mc100_writer)
+mc100_host_checks(mc100_supervisor)
+add_executable(test_supervisor_boot ../tests/test_supervisor_boot.c)
+target_include_directories(test_supervisor_boot PRIVATE
+    ../components/mc100_supervisor/include
+)
+target_link_libraries(test_supervisor_boot PRIVATE mc100_supervisor mc100_fake_io)
+mc100_host_checks(test_supervisor_boot)
+add_test(NAME supervisor_boot COMMAND test_supervisor_boot)
+
 foreach(name storage_writer storage_short_write rotate_15000 space_admission finalize_faults)
     add_executable(test_${name} ../tests/test_${name}.c)
     target_link_libraries(test_${name} PRIVATE mc100_fake_io)
