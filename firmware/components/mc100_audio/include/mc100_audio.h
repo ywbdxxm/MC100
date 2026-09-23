@@ -46,6 +46,10 @@ mc100_result_t mc100_audio_snapshot_frame(mc100_audio_t *a,
                                          const mc100_snapshot_t *snapshot,
                                          uint16_t index, mc100_frame_t *frame);
 mc100_result_t mc100_audio_pop(mc100_audio_t *a, mc100_packet_t *packet);
+/* Read the FIFO head without consuming it.  Supervisor owners use this to
+ * leave a successor generation queued while draining an older session. */
+mc100_result_t mc100_audio_peek(const mc100_audio_t *a,
+                               mc100_packet_t *packet);
 mc100_result_t mc100_audio_stop(mc100_audio_t *a, mc100_generation_t generation,
                                uint64_t *last_accepted_seq);
 /* STOP is idempotent. Always inspect cutoff_valid in status: an untriggered

@@ -131,6 +131,34 @@ static void cancel_only_one_generation_and_empty_cutoff(void)
     mc100_audio_destroy(a);
 }
 
+static void peek_does_not_consume_successor_packet(void)
+{
+    mc100_audio_t *a = mc100_audio_create();
+    mc100_packet_t packet;
+    uint64_t cutoff;
+    assert(a && mc100_audio_arm(a, 1, 0) == MC100_OK);
+    push(a, 0, true);
+    assert(mc100_audio_stop(a, 1, &cutoff) == MC100_OK && cutoff == 0);
+    assert(mc100_audio_snapshot_release(a, 1) == MC100_OK);
+    assert(mc100_audio_arm(a, 2, 1) == MC100_OK);
+    push(a, 1, true);
+
+    assert(mc100_audio_peek(a, &packet) == MC100_OK);
+    assert(packet.generation == 1 && packet.frame.seq == 0);
+    assert(mc100_audio_peek(a, &packet) == MC100_OK);
+    assert(packet.generation == 1 && packet.frame.seq == 0);
+    assert(mc100_audio_pop(a, &packet) == MC100_OK);
+    assert(packet.generation == 1 && packet.frame.seq == 0);
+    assert(mc100_audio_peek(a, &packet) == MC100_OK);
+    assert(packet.generation == 2 && packet.frame.seq == 1);
+    assert(mc100_audio_pop(a, &packet) == MC100_OK);
+    assert(packet.generation == 2 && packet.frame.seq == 1);
+    assert(mc100_audio_peek(a, &packet) == MC100_NOT_READY);
+    assert(mc100_audio_release(a, 1) == MC100_OK);
+    assert(mc100_audio_release(a, 2) == MC100_OK);
+    mc100_audio_destroy(a);
+}
+
 static void pending_edge_survives_until_minimum_sequence(void)
 {
     mc100_audio_t *a = mc100_audio_create();
@@ -158,6 +186,7 @@ int main(void)
     exact_history(0, 0, 0);
     closing_handoff();
     cancel_only_one_generation_and_empty_cutoff();
+    peek_does_not_consume_successor_packet();
     pending_edge_survives_until_minimum_sequence();
     return 0;
 }

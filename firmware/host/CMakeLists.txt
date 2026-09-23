@@ -143,13 +143,63 @@ target_include_directories(test_supervisor_record_active PRIVATE
 target_link_libraries(test_supervisor_record_active PRIVATE mc100_supervisor mc100_fake_io)
 mc100_host_checks(test_supervisor_record_active)
 add_test(NAME supervisor_record_active COMMAND test_supervisor_record_active)
-
+add_executable(test_supervisor_edges ../tests/test_supervisor_edges.c)
+target_include_directories(test_supervisor_edges PRIVATE
+    ../components/mc100_supervisor/include)
+target_link_libraries(test_supervisor_edges PRIVATE mc100_supervisor mc100_fake_io)
+mc100_host_checks(test_supervisor_edges)
+add_test(NAME supervisor_edges COMMAND test_supervisor_edges)
+add_executable(test_supervisor_monitor_events
+    ../tests/test_supervisor_monitor_events.c)
+target_include_directories(test_supervisor_monitor_events PRIVATE
+    ../components/mc100_supervisor/include)
+target_link_libraries(test_supervisor_monitor_events PRIVATE
+    mc100_supervisor mc100_fake_io)
+mc100_host_checks(test_supervisor_monitor_events)
+add_test(NAME supervisor_monitor_events COMMAND test_supervisor_monitor_events)
+add_executable(test_supervisor_rearm ../tests/test_supervisor_rearm.c)
+target_include_directories(test_supervisor_rearm PRIVATE
+    ../components/mc100_supervisor/include)
+target_link_libraries(test_supervisor_rearm PRIVATE
+    mc100_supervisor mc100_fake_io)
+mc100_host_checks(test_supervisor_rearm)
+add_test(NAME supervisor_rearm COMMAND test_supervisor_rearm)
+add_executable(test_supervisor_audio_owner
+    ../tests/test_supervisor_audio_owner.c)
+target_include_directories(test_supervisor_audio_owner PRIVATE
+    ../components/mc100_supervisor/include)
+target_link_libraries(test_supervisor_audio_owner PRIVATE
+    mc100_supervisor mc100_fake_io)
+mc100_host_checks(test_supervisor_audio_owner)
+add_test(NAME supervisor_audio_owner COMMAND test_supervisor_audio_owner)
+foreach(name supervisor_close supervisor_fault supervisor_recover_roundtrip)
+    add_executable(test_${name} ../tests/test_${name}.c)
+    target_include_directories(test_${name} PRIVATE
+        ../components/mc100_supervisor/include
+    )
+    target_link_libraries(test_${name} PRIVATE mc100_supervisor mc100_fake_io)
+    mc100_host_checks(test_${name})
+    add_test(NAME ${name} COMMAND test_${name})
+endforeach()
+add_executable(test_supervisor_rotation_publication
+    ../tests/test_supervisor_rotation_publication.c)
+target_include_directories(test_supervisor_rotation_publication PRIVATE
+    ../components/mc100_supervisor/include)
+target_link_libraries(test_supervisor_rotation_publication PRIVATE
+    mc100_supervisor mc100_fake_io)
+mc100_host_checks(test_supervisor_rotation_publication)
+add_test(NAME supervisor_rotation_publication
+    COMMAND test_supervisor_rotation_publication)
 foreach(name storage_writer storage_short_write rotate_15000 space_admission finalize_faults)
     add_executable(test_${name} ../tests/test_${name}.c)
     target_link_libraries(test_${name} PRIVATE mc100_fake_io)
     mc100_host_checks(test_${name})
     add_test(NAME ${name} COMMAND test_${name})
 endforeach()
+add_executable(test_writer_publication ../tests/test_writer_publication.c)
+target_link_libraries(test_writer_publication PRIVATE mc100_fake_io)
+mc100_host_checks(test_writer_publication)
+add_test(NAME writer_publication COMMAND test_writer_publication)
 foreach(name recover_prefix recover_idempotent)
     add_executable(test_${name} ../tests/test_${name}.c)
     target_link_libraries(test_${name} PRIVATE mc100_fake_io)

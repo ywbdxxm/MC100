@@ -25,6 +25,9 @@ typedef struct {
     unsigned close_calls;
     bool readiness_order_ok;
     bool fail_close_once;
+    mc100_result_t fail_close_result;
+    bool generate_pcm;
+    uint64_t pcm_seq;
 } sup_fake_t;
 
 static mc100_result_t sup_fake_open_exclusive(void *ctx, const char *path,
@@ -92,7 +95,7 @@ static mc100_result_t sup_fake_close(void *ctx, mc100_file_t file)
     ++fake->close_calls;
     if (fake->fail_close_once) {
         fake->fail_close_once = false;
-        return MC100_IO;
+        return fake->fail_close_result ? fake->fail_close_result : MC100_IO;
     }
     return mc100_fake_io_ops()->close(fake->storage, file);
 }
@@ -156,12 +159,81 @@ static bool sup_fake_driver_ready(void *ctx)
 static mc100_result_t sup_fake_pcm_read(void *ctx, uint8_t *buffer, size_t cap,
                                          size_t *count, uint32_t timeout_ms)
 {
-    (void)ctx;
-    (void)buffer;
-    (void)cap;
+    sup_fake_t *fake = ctx;
     (void)timeout_ms;
-    *count = 0;
+    if (!buffer || !count || cap < MC100_FRAME_SAMPLES * sizeof(int16_t))
+        return MC100_INVALID;
+    if (!fake->generate_pcm) {
+        *count = 0;
+        return MC100_OK;
+    }
+    for (size_t i = 0; i < MC100_FRAME_SAMPLES; ++i) {
+        int16_t sample = (int16_t)fake->pcm_seq;
+        buffer[i * 2] = (uint8_t)sample;
+        buffer[i * 2 + 1] = (uint8_t)((uint16_t)sample >> 8);
+    }
+    ++fake->pcm_seq;
+    *count = MC100_FRAME_SAMPLES * sizeof(int16_t);
     return MC100_OK;
+}
+
+static void sup_fake_set_vad_trigger(sup_fake_t *fake, uint64_t sequence)
+{
+    fake->generate_pcm = true;
+    fake->pcm_seq = 0;
+    fake->vad_state = (mc100_vad_fixed_t){0};
+    fake->vad_state.trigger_seq = sequence;
+}
+
+static const uint8_t *sup_fake_active_wav(const sup_fake_t *fake, size_t *size)
+{
+    for (size_t i = 0; i < mc100_fake_io_count(fake->storage); ++i) {
+        const char *path = mc100_fake_io_path(fake->storage, i);
+        if (path && strstr(path + 33, "reserve_") == NULL &&
+            strstr(path, ".wav.part") != NULL)
+            return mc100_fake_io_bytes(fake->storage, path, size);
+    }
+    if (size)
+        *size = 0;
+    return NULL;
+}
+
+static uint16_t sup_fake_u16le(const uint8_t *bytes)
+{
+    return (uint16_t)bytes[0] | ((uint16_t)bytes[1] << 8);
+}
+
+static uint64_t sup_fake_written_frames(const sup_fake_t *fake)
+{
+    /* Count committed PCM writes rather than scanning the preallocated file.
+     * The writer may retain a tail in its 32 KiB staging buffer, so an
+     * allocation-sentinel scan would under-count a valid preroll until the
+     * next checkpoint.  Header writes are at offset zero; every PCM flush is
+     * an exact write at or after the 512-byte WAV header. */
+    uint64_t bytes = 0;
+    for (size_t i = 0; i < mc100_fake_io_log_count(fake->storage); ++i) {
+        const mc100_fake_op_t *op = mc100_fake_io_log(fake->storage, i);
+        if (op != NULL && op->kind == 'W' && op->offset >= 512 &&
+            strstr(op->path, ".wav.part") != NULL)
+            bytes += op->length;
+    }
+    return bytes / 640;
+}
+
+static void sup_fake_assert_preroll(const sup_fake_t *fake,
+                                    const mc100_writer_status_t *status,
+                                    uint64_t first_sequence,
+                                    uint64_t frame_count)
+{
+    assert(status != NULL);
+    assert(status->active);
+    assert(status->accepted_bytes == frame_count * 640u);
+    assert(status->last_seq == first_sequence + frame_count - 1u);
+    size_t size = 0;
+    const uint8_t *bytes = sup_fake_active_wav(fake, &size);
+    assert(bytes != NULL);
+    assert(size >= 512 + 640);
+    assert(sup_fake_u16le(bytes + 512) == (uint16_t)first_sequence);
 }
 
 static void sup_fake_init(sup_fake_t *fake)
@@ -173,6 +245,8 @@ static void sup_fake_init(sup_fake_t *fake)
         fake->boot_id[i] = (uint8_t)i;
     fake->battery_is_ready = true;
     fake->driver_is_ready = true;
+    fake->fail_close_result = MC100_IO;
+    fake->vad_state.trigger_seq = UINT64_MAX;
     fake->readiness_order_ok = true;
     fake->io = (mc100_io_t){
         sup_fake_open_exclusive, sup_fake_open_read, sup_fake_open_update,
@@ -201,7 +275,7 @@ static mc100_supervisor_deps_t sup_fake_deps(sup_fake_t *fake)
         .driver_ctx = fake,
         .pcm_read = sup_fake_pcm_read,
         .pcm_ctx = fake,
-        .vad = mc100_vad_fixed(&fake->vad_state, UINT64_MAX),
+        .vad = mc100_vad_fixed(&fake->vad_state, fake->vad_state.trigger_seq),
         .upload = mc100_upload_noop(),
         .boot_id = fake->boot_id,
     };

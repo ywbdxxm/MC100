@@ -2,8 +2,22 @@
 #define MC100_WRITER_H
 #include "mc100_format.h"
 #include "mc100_io.h"
-enum { MC100_STAGING_BYTES = 32768, MC100_SLOT_BYTES = 9863168 };
+enum {
+  MC100_STAGING_BYTES = 32768,
+  MC100_SLOT_BYTES = 9863168,
+  /* Publication is a hand-off queue, not an unbounded event log.  The
+   * supervisor drains it after each writer operation; a full queue fails the
+   * next finalization before any rename, preserving a one-to-one hand-off for
+   * every clean publication committed by this writer instance. */
+  MC100_WRITER_PUBLICATION_CAPACITY = 4
+};
 typedef struct mc100_writer mc100_writer_t;
+typedef struct {
+  /* Writer-owned, durably published WAV filename (never a .part path). */
+  char name[MC100_PATH_BYTES];
+  mc100_generation_t generation;
+  uint32_t segment_index;
+} mc100_writer_publication_t;
 typedef struct {
   uint32_t prepared_slots, segment_index, latched_reason;
   uint64_t accepted_bytes, committed_bytes, last_seq;
@@ -31,4 +45,9 @@ mc100_result_t mc100_writer_close_through(mc100_writer_t *, mc100_generation_t,
                                           uint64_t last_seq, uint32_t reason);
 mc100_result_t mc100_writer_status(const mc100_writer_t *,
                                    mc100_writer_status_t *);
+/* Remove the oldest durable publication record.  MC100_NOT_READY means the
+ * queue is empty.  The returned name remains valid in the caller-owned record
+ * after the writer advances its queue. */
+mc100_result_t mc100_writer_publication_pop(
+    mc100_writer_t *, mc100_writer_publication_t *);
 #endif

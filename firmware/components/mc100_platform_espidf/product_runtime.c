@@ -5,10 +5,43 @@
 #include "mc100_battery_policy.h"
 #include "esp_random.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 #include "freertos/task.h"
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdint.h>
+#include <string.h>
+
+/* The I2S task is the only caller of mc100_platform_audio_*().  A fixed
+ * internal-RAM queue decouples the 20 ms PDM cadence from bounded SD writes.
+ * 96 items is the same frame budget as the portable audio stream (1.92 s of
+ * PCM); a full queue is a safety fault, never an unbounded allocation. */
+enum {
+    MC100_PRODUCT_PCM_QUEUE_FRAMES = MC100_STREAM_FRAMES,
+    MC100_PRODUCT_PCM_BYTES = MC100_FRAME_SAMPLES * sizeof(int16_t),
+    MC100_PRODUCT_COMMAND_QUEUE_CAPACITY = 4
+};
+
+typedef enum {
+    PRODUCT_AUDIO_CMD_START = 1,
+    PRODUCT_AUDIO_CMD_STOP,
+    PRODUCT_AUDIO_CMD_SHUTDOWN
+} product_audio_command_t;
+
+typedef struct {
+    size_t count;
+    uint8_t bytes[MC100_PRODUCT_PCM_BYTES];
+} product_pcm_item_t;
+
+/* One product instance exists.  Static storage makes the no-PSRAM placement
+ * explicit and keeps the queue out of the product task's stack. */
+static StaticQueue_t product_pcm_queue_struct;
+static uint8_t product_pcm_queue_storage[
+    MC100_PRODUCT_PCM_QUEUE_FRAMES * sizeof(product_pcm_item_t)];
+static StaticQueue_t product_command_queue_struct;
+static uint8_t product_command_queue_storage[
+    MC100_PRODUCT_COMMAND_QUEUE_CAPACITY * sizeof(product_audio_command_t)];
 
 /*
  * Product-only target adapter.  The supervisor remains the owner of the
@@ -21,10 +54,17 @@ typedef struct {
     bool storage_ready;
     bool audio_ready;
     bool storage_quiesced;
-    bool monitor_stop;
+    volatile bool monitor_stop;
     mc100_battery_policy_t *battery;
     mc100_supervisor_t *supervisor;
     TaskHandle_t monitor_task;
+    TaskHandle_t audio_task;
+    QueueHandle_t pcm_queue;
+    QueueHandle_t command_queue;
+    TaskHandle_t audio_ack_task;
+    mc100_result_t audio_command_result;
+    mc100_result_t audio_worker_error;
+    bool audio_worker_running;
     portMUX_TYPE event_mux;
 } product_runtime_ctx_t;
 
@@ -45,6 +85,175 @@ static void product_event_unlock(void *context)
     portEXIT_CRITICAL(&runtime->event_mux);
 }
 
+static void product_audio_ack(product_runtime_ctx_t *runtime,
+                              mc100_result_t result)
+{
+    TaskHandle_t waiter;
+    portENTER_CRITICAL(&runtime->event_mux);
+    runtime->audio_command_result = result;
+    waiter = runtime->audio_ack_task;
+    portEXIT_CRITICAL(&runtime->event_mux);
+    if (waiter != NULL) (void)xTaskNotifyGive(waiter);
+}
+
+static void product_audio_worker(void *argument)
+{
+    product_runtime_ctx_t *runtime = argument;
+    product_audio_command_t command;
+    for (;;) {
+        if (xQueueReceive(runtime->command_queue, &command, portMAX_DELAY) !=
+            pdPASS)
+            continue;
+        if (command == PRODUCT_AUDIO_CMD_SHUTDOWN) {
+            product_audio_ack(runtime, MC100_OK);
+            vTaskDelete(NULL);
+            return;
+        }
+        if (command == PRODUCT_AUDIO_CMD_STOP) {
+            /* A read error may have stopped the worker before the supervisor
+             * issued its cleanup command.  STOP is still an acknowledged
+             * idempotent quiescence operation; the latched read error remains
+             * visible through product_pcm_read(). */
+            product_audio_ack(runtime, MC100_OK);
+            continue;
+        }
+        if (command != PRODUCT_AUDIO_CMD_START) continue;
+
+        /* START is idempotent so ARM retries cannot create a second I2S
+         * owner.  The queue is empty before every new capture epoch. */
+        portENTER_CRITICAL(&runtime->event_mux);
+        bool already_running = runtime->audio_worker_running;
+        runtime->audio_worker_error = MC100_OK;
+        portEXIT_CRITICAL(&runtime->event_mux);
+        if (already_running) {
+            product_audio_ack(runtime, MC100_OK);
+            continue;
+        }
+        (void)xQueueReset(runtime->pcm_queue);
+        mc100_result_t result = mc100_platform_audio_start();
+        if (result != MC100_OK) {
+            product_audio_ack(runtime, result);
+            continue;
+        }
+        portENTER_CRITICAL(&runtime->event_mux);
+        runtime->audio_worker_running = true;
+        portEXIT_CRITICAL(&runtime->event_mux);
+        product_audio_ack(runtime, MC100_OK);
+
+        bool running = true;
+        while (running) {
+            product_audio_command_t pending;
+            while (xQueueReceive(runtime->command_queue, &pending, 0) ==
+                   pdPASS) {
+                if (pending == PRODUCT_AUDIO_CMD_STOP ||
+                    pending == PRODUCT_AUDIO_CMD_SHUTDOWN) {
+                    running = false;
+                    if (pending == PRODUCT_AUDIO_CMD_SHUTDOWN)
+                        command = pending;
+                    break;
+                }
+            }
+            if (!running) break;
+
+            product_pcm_item_t item = {0};
+            mc100_result_t read_result = mc100_platform_audio_read(
+                item.bytes, sizeof(item.bytes), &item.count, 20);
+            if (read_result == MC100_TIMEOUT) continue;
+            if (read_result != MC100_OK) {
+                portENTER_CRITICAL(&runtime->event_mux);
+                runtime->audio_worker_error = read_result;
+                portEXIT_CRITICAL(&runtime->event_mux);
+                /* Stop the owner cleanly; the consumer will route the
+                 * latched error to FAULT instead of accepting a gap. */
+                break;
+            }
+            if (item.count == 0) continue;
+            if (xQueueSend(runtime->pcm_queue, &item, 0) != pdPASS) {
+                portENTER_CRITICAL(&runtime->event_mux);
+                runtime->audio_worker_error = MC100_FULL;
+                portEXIT_CRITICAL(&runtime->event_mux);
+                /* Keep reading until STOP so a full software queue does not
+                 * leave the hardware DMA owner blocked.  New data is safely
+                 * discarded and the supervisor fails closed. */
+            }
+        }
+
+        mc100_result_t stop_result = mc100_platform_audio_stop();
+        portENTER_CRITICAL(&runtime->event_mux);
+        runtime->audio_worker_running = false;
+        mc100_result_t worker_error = runtime->audio_worker_error;
+        portEXIT_CRITICAL(&runtime->event_mux);
+        (void)xQueueReset(runtime->pcm_queue);
+        if (stop_result == MC100_OK && worker_error != MC100_OK)
+            stop_result = worker_error;
+        product_audio_ack(runtime, stop_result);
+        if (command == PRODUCT_AUDIO_CMD_SHUTDOWN) {
+            vTaskDelete(NULL);
+            return;
+        }
+        command = 0;
+    }
+}
+
+static mc100_result_t product_audio_command(product_runtime_ctx_t *runtime,
+                                            product_audio_command_t command)
+{
+    if (!runtime || !runtime->audio_task || !runtime->command_queue)
+        return MC100_NOT_READY;
+    TaskHandle_t waiter = xTaskGetCurrentTaskHandle();
+    portENTER_CRITICAL(&runtime->event_mux);
+    runtime->audio_ack_task = waiter;
+    runtime->audio_command_result = MC100_TIMEOUT;
+    portEXIT_CRITICAL(&runtime->event_mux);
+    (void)ulTaskNotifyTake(pdTRUE, 0);
+    if (xQueueSend(runtime->command_queue, &command, pdMS_TO_TICKS(100)) !=
+        pdPASS)
+        return MC100_FULL;
+    if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1500)) != 1)
+        return MC100_TIMEOUT;
+    portENTER_CRITICAL(&runtime->event_mux);
+    mc100_result_t result = runtime->audio_command_result;
+    portEXIT_CRITICAL(&runtime->event_mux);
+    return result;
+}
+
+static mc100_result_t product_audio_control(void *context,
+                                            mc100_supervisor_audio_control_t command,
+                                            mc100_generation_t generation)
+{
+    (void)generation;
+    product_runtime_ctx_t *runtime = context;
+    return product_audio_command(runtime,
+        command == MC100_SUPERVISOR_AUDIO_START ? PRODUCT_AUDIO_CMD_START :
+        PRODUCT_AUDIO_CMD_STOP);
+}
+
+static bool product_audio_worker_init(product_runtime_ctx_t *runtime)
+{
+    runtime->pcm_queue = xQueueCreateStatic(MC100_PRODUCT_PCM_QUEUE_FRAMES,
+        sizeof(product_pcm_item_t), product_pcm_queue_storage,
+        &product_pcm_queue_struct);
+    runtime->command_queue = xQueueCreateStatic(
+        MC100_PRODUCT_COMMAND_QUEUE_CAPACITY, sizeof(product_audio_command_t),
+        product_command_queue_storage, &product_command_queue_struct);
+    if (!runtime->pcm_queue || !runtime->command_queue) return false;
+    if (xTaskCreatePinnedToCore(product_audio_worker, "mc100_audio",
+                                8192, runtime, 20, &runtime->audio_task, 1) !=
+        pdPASS) {
+        runtime->audio_task = NULL;
+        return false;
+    }
+    return true;
+}
+
+static void product_audio_worker_shutdown(product_runtime_ctx_t *runtime)
+{
+    if (!runtime || !runtime->audio_task) return;
+    mc100_result_t result = product_audio_command(
+        runtime, PRODUCT_AUDIO_CMD_SHUTDOWN);
+    if (result == MC100_OK) runtime->audio_task = NULL;
+}
+
 /*
  * I2S and FatFs are owner-task resources.  Keep their lifecycle in small,
  * typed helpers so a future LOW/CRITICAL event path can stop and restart the
@@ -57,7 +266,8 @@ static mc100_result_t product_audio_start(product_runtime_ctx_t *runtime)
     if (!runtime || !runtime->board_ready || !runtime->storage_ready)
         return MC100_NOT_READY;
     if (runtime->audio_ready) return MC100_OK;
-    mc100_result_t result = mc100_platform_audio_start();
+    mc100_result_t result = product_audio_command(
+        runtime, PRODUCT_AUDIO_CMD_START);
     if (result == MC100_OK) runtime->audio_ready = true;
     return result;
 }
@@ -65,7 +275,8 @@ static mc100_result_t product_audio_start(product_runtime_ctx_t *runtime)
 static mc100_result_t product_audio_stop(product_runtime_ctx_t *runtime)
 {
     if (!runtime || !runtime->audio_ready) return MC100_OK;
-    mc100_result_t result = mc100_platform_audio_stop();
+    mc100_result_t result = product_audio_command(
+        runtime, PRODUCT_AUDIO_CMD_STOP);
     if (result == MC100_OK) runtime->audio_ready = false;
     return result;
 }
@@ -92,10 +303,6 @@ static void product_audio_reconcile(product_runtime_ctx_t *runtime,
         (state == MC100_LOW_BAT || state == MC100_LOW_BAT_HOLD ||
          state == MC100_FAULT)) {
         (void)product_audio_stop(runtime);
-    } else if (capture_active && !runtime->audio_ready) {
-        /* This is primarily a recovery hook.  The normal boot path starts
-         * audio in driver_ready(), after recovery and before READY/ARM. */
-        (void)product_audio_start(runtime);
     }
 }
 
@@ -105,11 +312,12 @@ static mc100_battery_result_t product_battery_sample(
     int millivolts = 0;
     mc100_result_t result = mc100_platform_adc_mv(&millivolts);
     /* ADC_BAT is the R6=1 Mohm/R7=330 kohm divider tap, not VBAT. */
-    int64_t battery_mv = ((int64_t)millivolts * 1330 + 165) / 330;
-    return mc100_battery_step(runtime->battery, (uint32_t)battery_mv,
-                              result == MC100_OK && millivolts > 0 &&
-                                  battery_mv > 0,
-                              at);
+    bool valid = result == MC100_OK && millivolts > 0;
+    int64_t battery_mv = valid ?
+        ((int64_t)millivolts * 1330 + 165) / 330 : 0;
+    if (battery_mv <= 0 || battery_mv > UINT32_MAX) valid = false;
+    return mc100_battery_step(runtime->battery,
+                              valid ? (uint32_t)battery_mv : 0, valid, at);
 }
 
 static void product_post_monitor_event(product_runtime_ctx_t *runtime,
@@ -124,7 +332,8 @@ static void product_post_monitor_event(product_runtime_ctx_t *runtime,
 static void product_monitor_task(void *argument)
 {
     product_runtime_ctx_t *runtime = argument;
-    bool previous_card = true;
+    bool stable_card = mc100_platform_card_present();
+    unsigned card_mismatch = 0;
     while (!runtime->monitor_stop) {
         uint64_t at = mc100_platform_now_ms();
         switch (product_battery_sample(runtime, at)) {
@@ -147,11 +356,19 @@ static void product_monitor_task(void *argument)
             break;
         }
         bool card = mc100_platform_card_present();
-        if (previous_card && !card)
-            product_post_monitor_event(runtime, MC100_EV_CRITICAL, 0, at);
-        previous_card = card;
+        if (card != stable_card) {
+            if (++card_mismatch >= 2) {
+                stable_card = card;
+                card_mismatch = 0;
+                if (!stable_card)
+                    product_post_monitor_event(runtime, MC100_EV_FAULT,
+                                               MC100_FAULT_STORAGE_IO, at);
+            }
+        } else {
+            card_mismatch = 0;
+        }
         product_post_monitor_event(runtime, MC100_EV_TICK, 0, at);
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
     vTaskDelete(NULL);
 }
@@ -213,8 +430,67 @@ static mc100_result_t product_pcm_read(void *context, uint8_t *buffer,
                                        size_t capacity, size_t *count,
                                        uint32_t timeout_ms)
 {
-    (void)context;
-    return mc100_platform_audio_read(buffer, capacity, count, timeout_ms);
+    product_runtime_ctx_t *runtime = context;
+    if (count) *count = 0;
+    if (!runtime || !buffer || !count || capacity < MC100_PRODUCT_PCM_BYTES ||
+        !runtime->pcm_queue)
+        return MC100_INVALID;
+    portENTER_CRITICAL(&runtime->event_mux);
+    mc100_result_t worker_error = runtime->audio_worker_error;
+    portEXIT_CRITICAL(&runtime->event_mux);
+    if (worker_error != MC100_OK) return worker_error;
+    product_pcm_item_t item = {0};
+    TickType_t wait = pdMS_TO_TICKS(timeout_ms);
+    if (xQueueReceive(runtime->pcm_queue, &item, wait) != pdPASS)
+        return MC100_OK; /* no frame yet is not a microphone fault */
+    if (item.count > capacity || item.count > sizeof(item.bytes))
+        return MC100_INVALID;
+    memcpy(buffer, item.bytes, item.count);
+    *count = item.count;
+    return MC100_OK;
+}
+
+/* Product boot is deliberately fail-closed.  Do not mount/recover/preallocate
+ * while the ADC has not produced a stable normal VBAT sample.  The loop is
+ * bounded per iteration and yields, so a USB-only EVT setup cannot turn a
+ * missing battery into repeated writes or a watchdog starvation. */
+static bool product_wait_for_battery(product_runtime_ctx_t *runtime)
+{
+    uint64_t last_report = 0;
+    for (;;) {
+        uint64_t at = mc100_platform_now_ms();
+        mc100_battery_result_t result = product_battery_sample(runtime, at);
+        if (result == MC100_BATTERY_NORMAL &&
+            mc100_battery_is_stable(runtime->battery))
+            return true;
+        if (at - last_report >= 5000) {
+            printf("MC100_PRODUCT waiting_battery result=%d stable=%u\n",
+                   (int)result,
+                   (unsigned)mc100_battery_is_stable(runtime->battery));
+            fflush(stdout);
+            last_report = at;
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+static bool product_mount_until_ready(product_runtime_ctx_t *runtime)
+{
+    uint64_t last_report = 0;
+    for (;;) {
+        if (mc100_platform_storage_mount() == MC100_OK) {
+            runtime->storage_ready = true;
+            return true;
+        }
+        uint64_t at = mc100_platform_now_ms();
+        if (at - last_report >= 5000) {
+            printf("MC100_PRODUCT waiting_storage card=%u\n",
+                   (unsigned)mc100_platform_card_present());
+            fflush(stdout);
+            last_report = at;
+        }
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
 }
 
 void mc100_product_run(void)
@@ -230,8 +506,13 @@ void mc100_product_run(void)
 
     esp_fill_random(boot_id, sizeof(boot_id));
     runtime.board_ready = mc100_platform_board_init() == MC100_OK;
-    if (runtime.board_ready)
-        runtime.storage_ready = mc100_platform_storage_mount() == MC100_OK;
+    if (!runtime.battery || !runtime.board_ready) {
+        mc100_battery_destroy(runtime.battery);
+        vTaskDelete(NULL);
+        return;
+    }
+    (void)product_wait_for_battery(&runtime);
+    (void)product_mount_until_ready(&runtime);
 
     deps.io = mc100_platform_storage_io();
     deps.io_ctx = mc100_platform_storage_context();
@@ -242,17 +523,21 @@ void mc100_product_run(void)
     deps.driver_ready = product_driver_ready;
     deps.driver_ctx = &runtime;
     deps.pcm_read = product_pcm_read;
-    deps.pcm_ctx = NULL;
+    deps.pcm_ctx = &runtime;
     deps.vad = mc100_vad_fixed(&vad_state, 120U);
     deps.upload = mc100_upload_noop();
     deps.boot_id = boot_id;
     deps.event_lock = product_event_lock;
     deps.event_unlock = product_event_unlock;
     deps.event_lock_ctx = &runtime;
+    deps.audio_control = product_audio_control;
+    deps.audio_control_ctx = &runtime;
 
     if (!runtime.battery || !runtime.board_ready || !runtime.storage_ready ||
+        !product_audio_worker_init(&runtime) ||
         deps.io == NULL) {
         (void)product_audio_stop(&runtime);
+        product_audio_worker_shutdown(&runtime);
         (void)product_storage_unmount(&runtime);
         mc100_battery_destroy(runtime.battery);
         vTaskDelete(NULL);
@@ -263,6 +548,7 @@ void mc100_product_run(void)
     if (supervisor == NULL || mc100_supervisor_boot(supervisor) != MC100_OK) {
         mc100_supervisor_destroy(supervisor);
         (void)product_audio_stop(&runtime);
+        product_audio_worker_shutdown(&runtime);
         (void)product_storage_unmount(&runtime);
         mc100_battery_destroy(runtime.battery);
         vTaskDelete(NULL);
@@ -273,6 +559,7 @@ void mc100_product_run(void)
                     6, &runtime.monitor_task) != pdPASS) {
         mc100_supervisor_destroy(supervisor);
         (void)product_audio_stop(&runtime);
+        product_audio_worker_shutdown(&runtime);
         (void)product_storage_unmount(&runtime);
         mc100_battery_destroy(runtime.battery);
         vTaskDelete(NULL);
