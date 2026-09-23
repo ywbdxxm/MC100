@@ -200,6 +200,15 @@ static mc100_result_t action(mc100_supervisor_t *s,
     mc100_result_t r;
     switch (a->id) {
     case MC100_ACT_ARM: {
+        if (s->deps.audio_control != NULL) {
+            r = s->deps.audio_control(s->deps.audio_control_ctx,
+                                      MC100_SUPERVISOR_AUDIO_START,
+                                      a->generation);
+            if (r != MC100_OK) {
+                (void)raise_fault(s, MC100_FAULT_MIC_IO);
+                return r;
+            }
+        }
         r = mc100_audio_arm(s->audio, a->generation,
                             a->seq_valid ? a->seq : 0);
         if (r != MC100_OK) {
@@ -253,6 +262,15 @@ static mc100_result_t action(mc100_supervisor_t *s,
     }
     case MC100_ACT_STOP_CAPTURE: {
         uint64_t cutoff = 0;
+        if (s->deps.audio_control != NULL) {
+            r = s->deps.audio_control(s->deps.audio_control_ctx,
+                                      MC100_SUPERVISOR_AUDIO_STOP,
+                                      a->generation);
+            if (r != MC100_OK) {
+                (void)raise_fault(s, MC100_FAULT_MIC_IO);
+                return r;
+            }
+        }
         r = mc100_audio_stop(s->audio, a->generation, &cutoff);
         if (r != MC100_OK) {
             /* Do not acknowledge a failed stop.  The state machine must take
@@ -352,6 +370,20 @@ static mc100_result_t action(mc100_supervisor_t *s,
         s->silence_pending = false;
         return r;
     case MC100_ACT_HOLD: {
+        if (s->deps.audio_control != NULL) {
+            if (s->recording_generation) {
+                r = s->deps.audio_control(s->deps.audio_control_ctx,
+                                          MC100_SUPERVISOR_AUDIO_STOP,
+                                          s->recording_generation);
+                if (r != MC100_OK) return r;
+            }
+            if (s->armed_generation) {
+                r = s->deps.audio_control(s->deps.audio_control_ctx,
+                                          MC100_SUPERVISOR_AUDIO_STOP,
+                                          s->armed_generation);
+                if (r != MC100_OK) return r;
+            }
+        }
         mc100_writer_abandon(s->writer, a->detail);
         r = mc100_writer_release_handles(s->writer);
         mc100_result_t q = release_audio(s, s->recording_generation);
