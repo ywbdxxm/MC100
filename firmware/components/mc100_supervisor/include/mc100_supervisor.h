@@ -16,6 +16,10 @@ typedef struct {
     void *io_ctx;
     uint64_t (*now_ms)(void *);
     void *clock_ctx;
+    bool (*battery_ready)(void *);
+    void *battery_ctx;
+    bool (*driver_ready)(void *);
+    void *driver_ctx;
     mc100_result_t (*pcm_read)(void *ctx, uint8_t *buf, size_t cap,
                                size_t *count, uint32_t timeout_ms);
     void *pcm_ctx;

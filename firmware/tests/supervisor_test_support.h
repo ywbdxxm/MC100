@@ -18,6 +18,11 @@ typedef struct {
     uint64_t now;
     uint64_t advance_on_list_ms;
     unsigned recovery_called;
+    bool battery_is_ready;
+    bool driver_is_ready;
+    unsigned battery_calls;
+    unsigned driver_calls;
+    bool readiness_order_ok;
 } sup_fake_t;
 
 static mc100_result_t sup_fake_open_exclusive(void *ctx, const char *path,
@@ -109,7 +114,8 @@ static mc100_result_t sup_fake_list(void *ctx, mc100_io_visit_fn visit,
                                     void *visit_ctx)
 {
     sup_fake_t *fake = ctx;
-    ++fake->recovery_called;
+    if (fake->recovery_called == 0)
+        ++fake->recovery_called;
     mc100_result_t result = mc100_fake_io_ops()->list(fake->storage, visit,
                                                        visit_ctx);
     fake->now += fake->advance_on_list_ms;
@@ -119,6 +125,24 @@ static mc100_result_t sup_fake_list(void *ctx, mc100_io_visit_fn visit,
 static uint64_t sup_fake_now(void *ctx)
 {
     return ((sup_fake_t *)ctx)->now;
+}
+
+static bool sup_fake_battery_ready(void *ctx)
+{
+    sup_fake_t *fake = ctx;
+    ++fake->battery_calls;
+    if (fake->recovery_called != 1 || mc100_fake_io_log_count(fake->storage) < 2)
+        fake->readiness_order_ok = false;
+    return fake->battery_is_ready;
+}
+
+static bool sup_fake_driver_ready(void *ctx)
+{
+    sup_fake_t *fake = ctx;
+    ++fake->driver_calls;
+    if (fake->battery_calls != 1)
+        fake->readiness_order_ok = false;
+    return fake->driver_is_ready;
 }
 
 static mc100_result_t sup_fake_pcm_read(void *ctx, uint8_t *buffer, size_t cap,
@@ -139,6 +163,9 @@ static void sup_fake_init(sup_fake_t *fake)
     assert(fake->storage != NULL);
     for (size_t i = 0; i < sizeof(fake->boot_id); ++i)
         fake->boot_id[i] = (uint8_t)i;
+    fake->battery_is_ready = true;
+    fake->driver_is_ready = true;
+    fake->readiness_order_ok = true;
     fake->io = (mc100_io_t){
         sup_fake_open_exclusive, sup_fake_open_read, sup_fake_open_update,
         sup_fake_read_at, sup_fake_write_at, sup_fake_allocate, sup_fake_sync,
@@ -160,6 +187,10 @@ static mc100_supervisor_deps_t sup_fake_deps(sup_fake_t *fake)
         .io_ctx = fake,
         .now_ms = sup_fake_now,
         .clock_ctx = fake,
+        .battery_ready = sup_fake_battery_ready,
+        .battery_ctx = fake,
+        .driver_ready = sup_fake_driver_ready,
+        .driver_ctx = fake,
         .pcm_read = sup_fake_pcm_read,
         .pcm_ctx = fake,
         .vad = mc100_vad_fixed(&fake->vad_state, UINT64_MAX),

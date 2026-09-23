@@ -27,6 +27,15 @@ static mc100_result_t supervisor_fault(mc100_supervisor_t *supervisor,
     return result == MC100_OK ? cause : result;
 }
 
+static mc100_result_t supervisor_boot_failure(mc100_supervisor_t *supervisor,
+                                               mc100_result_t cause)
+{
+    mc100_writer_abandon(supervisor->writer,
+                         MC100_FAULT_RECOVERY_REQUIRED);
+    (void)mc100_writer_release_handles(supervisor->writer);
+    return supervisor_fault(supervisor, cause);
+}
+
 static mc100_result_t supervisor_pump_event(mc100_supervisor_t *supervisor,
                                              const mc100_event_t *event)
 {
@@ -106,7 +115,24 @@ mc100_result_t mc100_supervisor_boot(mc100_supervisor_t *supervisor)
         supervisor->deps.io, supervisor->deps.io_ctx, deadline,
         supervisor->deps.now_ms, supervisor->deps.clock_ctx, &report);
     if (result != MC100_OK)
-        return supervisor_fault(supervisor, result);
+        return supervisor_boot_failure(supervisor, result);
+
+    result = mc100_writer_prepare(supervisor->writer);
+    if (result != MC100_OK)
+        return supervisor_boot_failure(supervisor, result);
+    mc100_writer_status_t writer_status;
+    result = mc100_writer_status(supervisor->writer, &writer_status);
+    if (result != MC100_OK || writer_status.prepared_slots < 2)
+        return supervisor_boot_failure(supervisor,
+                                       result == MC100_OK ? MC100_NOT_READY
+                                                          : result);
+
+    if (supervisor->deps.battery_ready == NULL ||
+        !supervisor->deps.battery_ready(supervisor->deps.battery_ctx))
+        return supervisor_boot_failure(supervisor, MC100_NOT_READY);
+    if (supervisor->deps.driver_ready == NULL ||
+        !supervisor->deps.driver_ready(supervisor->deps.driver_ctx))
+        return supervisor_boot_failure(supervisor, MC100_NOT_READY);
 
     mc100_event_t ready = {
         .id = MC100_EV_READY,
@@ -117,6 +143,8 @@ mc100_result_t mc100_supervisor_boot(mc100_supervisor_t *supervisor)
     result = supervisor_pump_event(supervisor, &ready);
     if (result == MC100_OK)
         supervisor->booted = true;
+    else
+        result = supervisor_boot_failure(supervisor, result);
     return result;
 }
 
