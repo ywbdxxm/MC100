@@ -13,6 +13,9 @@ Desktop.ini
 /firmware/sdkconfig
 /firmware/sdkconfig.old
 
+# Local host/diagnostic build output
+/out/
+
 # Local hardware and corpus evidence (hash manifest is retained locally)
 /evidence/
 

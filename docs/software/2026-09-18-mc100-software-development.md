@@ -1,5 +1,7 @@
 # MC100 V1 Software Development Implementation Plan
 
+> **状态更新（2026-09-23）**：本文的 T01–T14 任务表已大半完成且认知过时，开发路线以 [最终形态设计 §7](2026-09-23-mc100-final-form-design.md) 与 [Phase 0–2 实施计划](2026-09-23-mc100-phase-0-2-implementation-plan.md) 为准。本文保留作历史语境与详细验收思路参考。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans or superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. 当前执行模式允许有界子任务及独立审查；共享接口变更须协调，避免并发修改同一文件。
 
 **Goal:** 在板子到货前交付可复现构建、同源电脑测试覆盖的离线自动录音固件候选，板子到货后完成有证据的 EVT 验证。

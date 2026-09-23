@@ -94,18 +94,20 @@ ESP32-S3 数据手册 v2.2，Modem-sleep、双核 WAITI：
 | 40 MHz（18.8 + 麦 0.8 + SD 空闲 + LDO + 杂项） | 23–26 mA | 37–42 h |
 | 80 MHz（36.1 + 外设） | 40–43 mA | 22–24 h |
 
+**2026-09-23 COM7 实测回填（不改变上表估算）：** 在锁定的 ESP-IDF v6.1 / ESP32-S3-MINI-1-N8、无 PSRAM组合上，固定 CPU/APB 40 MHz 的 PDM RX 在 `i2s_channel_enable()` 启动阶段触发 Task WDT，未产生连续帧；增加显式 APB lock 后仍为 40/40 MHz并同样失败。DFS 配置 `max=80/min=40` 可运行 PDM，但 PDM 活跃期间实际 CPU/APB 为 80/80 MHz。因此本轮没有证明“PDM + VAD 全程 40 MHz”，也没有把 23–26 mA / 40–43 mA 估算改写成实测值；电池侧电流仍 **NOT_RUN**。同一轮的 esp-sr 2.4.7 / VADNet1 medium 无 PSRAM target build 通过，但 COM7 runtime 在 AFE 的 `sr_rb_create` 因内部内存耗尽失败并 panic（`INIT FAIL / BLOCKED`），没有帧级 VAD 数据；该结果只约束当前模型/内存策略/无 PSRAM tuple，不外推为所有 esp-sr 方案不可行。原始数据见 [Phase 1 PM/VAD spike 报告](2026-09-23-mc100-pm40-vad-spike.md)。
+
 40 MHz 能跑则续航宽裕；只能 80 MHz 则刚好卡线、无余量。
 
-支持 40 MHz 够用的证据：
+此前的资源证据（仅说明当前 80 MHz 软件路径余量，不证明 40 MHz PDM 可行）：
 - 队列峰值仅 16/96（83% 余量），当前 80 MHz 下 CPU 远未吃满。
 - 真正瓶颈是 SD I/O（等待，不吃 CPU）。
 - Audio 剩余栈 5,044 byte、Storage 40.4%，均不紧张。
 
 风险：
-- **libfvad 的 CPU 开销从未实测**（T07 未开始）——最大未知数。
-- 架构 §2 记：IDF v6.1 的 I2S PDM RX 持 PM 锁，**可能根本降不到 40 MHz**。
+- **VAD 证据仍不完整**：libfvad 只在 80 MHz/DFS（活跃 80 MHz）路径取得工程开销数据；esp-sr 2.4.7 + VADNet1 medium 已通过无 PSRAM target build，但本次 COM7 runtime 在 AFE 创建阶段因内部内存耗尽失败，init/runtime 的可运行数据、授权语料和最终 VAD 选型仍未完成（P1 OPEN）。build/runtime 日志见 [Phase 1 PM/VAD spike 报告](2026-09-23-mc100-pm40-vad-spike.md)。
+- 本次固定 40 MHz 实测已观察到 IDF v6.1 / ESP32-S3 PDM 启动不完成；DFS 的 40 MHz 下限在 PDM 活跃时被实际运行点顶回 80 MHz。该结论只约束本次精确 tuple，不外推到其它 IDF、芯片或 I2S 模式。
 
-因此 Phase 1 用一个最小 spike 先回答这个问题，它决定后续功耗架构。若 40 MHz 不可达，届时的选项不是砍 sync，而是更狠的间歇采样（牺牲连续监听）或接受 12–14h 续航——那是另一次设计决策。
+本次 Phase 1 spike 已回答本精确 tuple 下固定 40 MHz PDM 启动不可行、DFS 活跃点为 80 MHz；esp-sr 2.4.7 + VADNet1 medium 的无 PSRAM target build 已 PASS，但当前模型/内存策略的 COM7 AFE runtime 为 **INIT FAIL / BLOCKED**，授权语料和电池侧电流尚未运行，Phase 1 gate 仍 OPEN，后续功耗架构不能仅凭本报告定案。不要把一次模型内存失败扩大解释为所有 esp-sr 方案不可行；应先评估替代模型/内存策略，再与 libfvad 做公平比较。若确认 40 MHz 不可达，选项不是砍 sync，而是更狠的间歇采样（牺牲连续监听）或接受较短续航——那是另一次产品决策。
 
 ---
 
@@ -177,7 +179,7 @@ PGOOD#/CHG# **未接 MCU**，设备当前探测不到"在充电"。绕行：电�
 
 | 子系统 | 现成方案 | 判定 | 理由 |
 | --- | --- | --- | --- |
-| **VAD** | esp-sr VADNet（神经网络，官方）/ libfvad（WebRTC 定点 C） | **Phase 1 spike 择优,不预设** | 两个都是现成的。esp-sr 官方支持但默认假设 PSRAM（我们无 PSRAM，有 WakeNet9s 无 PSRAM 先例但 VADNet 未确认）；libfvad 纯定点 C 无 OS 依赖、包成组件干净但要自己 wrap。按无 PSRAM 下 CPU/RAM/召回率实测择优 |
+| **VAD** | esp-sr VADNet（神经网络，官方）/ libfvad（WebRTC 定点 C） | **Phase 1 spike 择优,不预设** | 两个都是现成的。esp-sr 2.4.7 / VADNet1 medium 已证明无 PSRAM target build 可生成镜像；本次 COM7 runtime 在 AFE 创建阶段因内部内存耗尽失败；libfvad 纯定点 C 无 OS 依赖且已取得 80 MHz 工程数据。仍须按同口径 CPU/RAM/延迟、召回率和误启动实测择优 |
 | **降频/DFS** | ESP-IDF `esp_pm` | **用现成** | 不自己写时钟切换,用框架 `esp_pm_configure` |
 | **FatFs / SDMMC / I2S PDM** | ESP-IDF 自带 | **已在用** | 无需改动 |
 | **BLE 协议栈** | NimBLE（IDF 自带,比 Bluedroid 省 RAM） | **Phase 6 用现成** | 不自造 GATT |
@@ -189,7 +191,7 @@ PGOOD#/CHG# **未接 MCU**，设备当前探测不到"在充电"。绕行：电�
 | **存储 journal/索引/恢复** | littlefs（掉电健壮） | **保留自造** | littlefs 掉电健壮但 **PC 不能直接读**;MC100 要求取出卡在标准播放器放 WAV,硬性要 FAT。这是自造 journal 的根本理由,非盲目造轮子 |
 | **状态机** | 各种 FSM 库 | **保留自造** | 产品专属业务逻辑,无库可替 |
 
-结论:VAD 和无线栈是"该用现成而之前漏评估"的地方（尤其 esp-sr 从未被评估）；存储/WAV/CRC 的自造有据可查,保留。
+结论:VAD 和无线栈是"该用现成而之前漏评估"的地方（esp-sr 已完成 target-build 评估，运行时与语料仍待补齐）；存储/WAV/CRC 的自造有据可查,保留。
 
 ---
 
@@ -242,11 +244,12 @@ PGOOD#/CHG# **未接 MCU**，设备当前探测不到"在充电"。绕行：电�
 
 | 项 | 状态 | 影响 |
 | --- | --- | --- |
-| 40 MHz 可达性 | Phase 1 验证 | 决定续航命题；最高优先级未知数 |
-| libfvad CPU/RAM 实测 | 未测 | 影响 40 MHz 预算与 Phase 3 |
+| 40 MHz 可达性 | **部分实测：固定 40 MHz PDM 启动失败；DFS 活跃时为 80/80 MHz** | 连续 PDM + VAD 全程 40 MHz 命题未成立；功耗架构仍需决策 |
+| 电池侧电流（40/80、PDM+VAD） | **未测（P1 OPEN）** | 上表 23–26 / 40–43 mA 仍是估算，不得当作实测 |
+| VAD 选型（esp-sr/libfvad）与授权语料 | **OPEN（esp-sr runtime blocked、语料未测）** | esp-sr 2.4.7 + VADNet1 medium 无 PSRAM target build 已 PASS；COM7 已确认模型加载，但当前 AFE 配置因内部内存耗尽 `INIT FAIL / BLOCKED`，无帧级数据；libfvad 仅有 80/DFS 工程探针，没有公平比较、召回率或误启动证据，不能定型 |
 | SD sync 实际延迟分布 | 未测（H03） | trade-off 中 SD 相关数为估算，需实测校准 |
 | 无线接收端（手机直传 vs Wi-Fi 服务器） | 未定 | Phase 6 决策，现在只留接缝 |
 | PGOOD# 探测 | 硬件缺口 | "充电时自动传"需改板或软件推断 |
 | 无线开启后 RAM 余量 | 未测 | 当前 126,856 byte 空闲堆是 MINIMAL_BUILD（无线剔除）下测得，开无线要还回一部分 |
 | 装机后 RF 净空/天线影响 | 未测 | Phase 6 前置 |
-| esp-sr VADNet 无 PSRAM 可行性 | 未测 | Phase 1 spike 对比 libfvad;之前从未评估 esp-sr 是复用缺口 |
+| esp-sr VADNet 无 PSRAM 可行性 | **部分完成：target build PASS；当前 runtime INIT FAIL / BLOCKED** | esp-sr 2.4.7 + VADNet1 medium 镜像已生成；COM7 已确认模型加载，但 AFE 创建因内部内存耗尽失败；仍需评估替代模型/内存策略、延迟和语料对比 |

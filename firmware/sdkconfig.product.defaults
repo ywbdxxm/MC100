@@ -1,0 +1,2 @@
+# Product profile explicitly selects the autonomous recording entry point.
+CONFIG_MC100_APP_PRODUCT=y

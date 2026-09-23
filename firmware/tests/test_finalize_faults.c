@@ -92,6 +92,9 @@ static void finalize_failure(size_t position, bool short_write) {
   assert(exists(fake, wav_final) == (position == 15));
   assert(exists(fake, idx_part) && !exists(fake, idx_final));
   assert(mc100_fake_io_count(fake) == 4);
+  mc100_writer_publication_t publication = {0};
+  assert(mc100_writer_publication_pop(writer, &publication) ==
+         MC100_NOT_READY);
   assert_latched(writer, fake, MC100_IO);
   release_and_destroy(writer, fake,
                       position <= 12   ? 2
@@ -166,6 +169,12 @@ static void normal_close_control(void) {
   assert(final.type == MC100_INDEX_FINAL && final.pcm_offset == 5120);
   assert(final.flags == 0 && final.detail == 0);
   assert(!exists(fake, wav_part) && !exists(fake, idx_part));
+  mc100_writer_publication_t publication = {0};
+  assert(mc100_writer_publication_pop(writer, &publication) == MC100_OK);
+  assert(!strcmp(publication.name, wav_final));
+  assert(publication.generation == 3 && publication.segment_index == 0);
+  assert(mc100_writer_publication_pop(writer, &publication) ==
+         MC100_NOT_READY);
   release_and_destroy(writer, fake, 0);
 }
 

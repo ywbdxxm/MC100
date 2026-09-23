@@ -6,6 +6,15 @@ $firmwareRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $shell = (Get-Process -Id $PID).Path
 $buildScript = Join-Path $firmwareRoot 'tools/build.ps1'
 $hostScript = Join-Path $firmwareRoot 'tools/test-host.ps1'
+$buildScriptText = Get-Content -Raw -LiteralPath $buildScript
+$evtDefaults = Get-Content -Raw -LiteralPath (Join-Path $firmwareRoot 'sdkconfig.evt.defaults')
+$productDefaults = Get-Content -Raw -LiteralPath (Join-Path $firmwareRoot 'sdkconfig.product.defaults')
+if ($buildScriptText -notmatch "sdkconfig\.\{0\}\.defaults" -or
+    $evtDefaults -notmatch '(?m)^# CONFIG_MC100_APP_PRODUCT is not set\s*$' -or
+    $productDefaults -notmatch '(?m)^CONFIG_MC100_APP_PRODUCT=y\s*$') {
+    throw 'Profile defaults do not explicitly select EVT and product application modes.'
+}
+Write-Host 'PASS application profile defaults: evt selects bench and product selects autonomous loop.'
 $localConfig = Join-Path $firmwareRoot 'sdkconfig'
 $before = if (Test-Path -LiteralPath $localConfig) { (Get-FileHash -LiteralPath $localConfig).Hash } else { $null }
 

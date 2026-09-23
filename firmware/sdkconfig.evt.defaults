@@ -1,0 +1,2 @@
+# EVT_USB_BENCH explicitly selects the manual diagnostic entry point.
+# CONFIG_MC100_APP_PRODUCT is not set

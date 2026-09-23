@@ -26,6 +26,14 @@ mc100_result_t mc100_audio_pop(mc100_audio_t *a, mc100_packet_t *packet)
     return MC100_OK;
 }
 
+mc100_result_t mc100_audio_peek(const mc100_audio_t *a, mc100_packet_t *packet)
+{
+    if (!a || !packet) return MC100_INVALID;
+    if (!a->stream.stats.current) return MC100_NOT_READY;
+    *packet = a->stream.packets[a->stream.head];
+    return MC100_OK;
+}
+
 void mc100_stream_discard(mc100_stream_t *stream, mc100_generation_t generation)
 {
     /* Caller quiesces/serializes consumer before compaction. Forward compaction

@@ -1,1 +1,1 @@
-idf_component_register(SRCS "state.c" "battery_policy.c" INCLUDE_DIRS "include")
+idf_component_register(SRCS "state.c" "battery_policy.c" "upload_noop.c" INCLUDE_DIRS "include")

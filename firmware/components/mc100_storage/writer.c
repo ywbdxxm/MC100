@@ -24,6 +24,8 @@ struct mc100_writer {
   uint32_t reason;
   mc100_result_t failed;
   bool active, has_frames, abandoned;
+  mc100_writer_publication_t publications[MC100_WRITER_PUBLICATION_CAPACITY];
+  uint8_t publication_head, publication_count;
 };
 
 bool mc100_path_valid(const char *p) {
@@ -57,6 +59,14 @@ bool mc100_path_valid(const char *p) {
     return false;
   while (*q >= '0' && *q <= '9')
     ++q;
+  if (!strncmp(q, ".recovering_", 12)) {
+    q += 12;
+    if (*q < '0' || *q > '9')
+      return false;
+    while (*q >= '0' && *q <= '9')
+      ++q;
+    return !strcmp(q, ".wav.part");
+  }
   return !strcmp(q, ".wav.part") || !strcmp(q, ".idx.part") ||
          !strcmp(q, ".wav") || !strcmp(q, ".idx") ||
          !strcmp(q, ".partial.wav") || !strcmp(q, ".recovered.wav");
@@ -184,6 +194,38 @@ mc100_result_t mc100_writer_status(const mc100_writer_t *w,
   s->abandoned = w->abandoned;
   return MC100_OK;
 }
+
+static void publication_push(mc100_writer_t *w, const char *name,
+                             mc100_generation_t generation,
+                             uint32_t segment_index) {
+  /* finish() reserves capacity and validates this writer-built path before
+   * either final rename.  Queue commit after both renames is therefore
+   * allocation-free and cannot fail. */
+  uint8_t slot = (uint8_t)((w->publication_head + w->publication_count) %
+                           MC100_WRITER_PUBLICATION_CAPACITY);
+  mc100_writer_publication_t *p = &w->publications[slot];
+  size_t n = strlen(name);
+  memcpy(p->name, name, n + 1);
+  p->generation = generation;
+  p->segment_index = segment_index;
+  ++w->publication_count;
+}
+
+mc100_result_t mc100_writer_publication_pop(
+    mc100_writer_t *w, mc100_writer_publication_t *publication) {
+  if (!w || !publication)
+    return MC100_INVALID;
+  if (!w->publication_count)
+    return MC100_NOT_READY;
+  *publication = w->publications[w->publication_head];
+  memset(&w->publications[w->publication_head], 0,
+         sizeof(w->publications[w->publication_head]));
+  w->publication_head =
+      (uint8_t)((w->publication_head + 1) % MC100_WRITER_PUBLICATION_CAPACITY);
+  --w->publication_count;
+  return MC100_OK;
+}
+
 static mc100_result_t reserve_visit(void *ctx, const char *p) {
   mc100_writer_t *w = ctx;
   if (!mc100_path_valid(p) || !strstr(p + 33, "reserve_") ||
@@ -531,6 +573,11 @@ static mc100_result_t flush(mc100_writer_t *w, bool tail, uint16_t terminal,
   return MC100_OK;
 }
 static mc100_result_t finish(mc100_writer_t *w, uint32_t reason) {
+  /* Reserve the hand-off slot before changing on-card names.  Incident
+   * closures are not upload publications, so they remain possible even when
+   * the clean-publication queue is full. */
+  if (!reason && w->publication_count >= MC100_WRITER_PUBLICATION_CAPACITY)
+    return MC100_FULL;
   mc100_result_t r =
       flush(w, true, reason ? MC100_INDEX_INCIDENT : MC100_INDEX_FINAL, reason);
   if (r)
@@ -579,6 +626,8 @@ static mc100_result_t finish(mc100_writer_t *w, uint32_t reason) {
   r = w->io.rename_no_replace(w->ctx, w->current.idx, idx);
   if (r)
     return r;
+  if (!reason)
+    publication_push(w, wav, w->generation, w->segment);
   w->active = false;
   if (reason)
     w->reason = reason;

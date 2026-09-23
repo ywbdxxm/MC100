@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('host', 'evt', 'release')]
+    [ValidateSet('host', 'evt', 'product', 'release')]
     [string]$Profile = 'evt',
     [string]$OutputDirectory = 'out/target',
     [switch]$Clean
@@ -72,8 +72,13 @@ if ((Test-Path -LiteralPath $descriptionPath) -and -not $Clean) {
 if ($Clean -and (Test-Path -LiteralPath $buildDirectory)) { Remove-Item -LiteralPath $buildDirectory -Recurse -Force }
 $sdkconfigPath = Join-Path $buildDirectory 'sdkconfig'
 $defaultsPath = Join-Path $firmwareRoot 'sdkconfig.defaults'
+$profileDefaultsPath = Join-Path $firmwareRoot ("sdkconfig.{0}.defaults" -f $Profile)
+if (-not (Test-Path -LiteralPath $profileDefaultsPath -PathType Leaf)) {
+    throw "Missing configuration defaults for profile '$Profile'."
+}
 Write-Host "Validated $idfVersion / $revision / $($lock.target)"
-& $python $idfScript -C $firmwareRoot -B $buildDirectory -D "SDKCONFIG=$sdkconfigPath" -D "SDKCONFIG_DEFAULTS=$defaultsPath" -D "IDF_TARGET=$($lock.target)" build
+$sdkconfigDefaults = "$defaultsPath;$profileDefaultsPath"
+& $python $idfScript -C $firmwareRoot -B $buildDirectory -D "SDKCONFIG=$sdkconfigPath" -D "SDKCONFIG_DEFAULTS=$sdkconfigDefaults" -D "IDF_TARGET=$($lock.target)" build
 if ($LASTEXITCODE -ne 0) { throw "Target build failed ($LASTEXITCODE)." }
 
 $description = Get-Content -Raw -LiteralPath $descriptionPath | ConvertFrom-Json
@@ -83,6 +88,10 @@ if ($description.target -ne $lock.target -or $description.git_revision -ne $lock
     throw 'Build metadata does not match the validated SDK, target, and isolated configuration.'
 }
 $config = Get-Content -Raw -LiteralPath (Join-Path $buildDirectory 'config/sdkconfig.json') | ConvertFrom-Json
+$expectedProduct = $Profile -eq 'product'
+if ([bool]$config.MC100_APP_PRODUCT -ne $expectedProduct) {
+    throw "Resolved application mode does not match profile '$Profile'."
+}
 if ($config.ESPTOOLPY_FLASHSIZE -ne '8MB' -or $config.SPIRAM -or $config.ESP_DEFAULT_CPU_FREQ_MHZ -ne 80 -or
     -not $config.ESP_CONSOLE_USB_SERIAL_JTAG -or -not $config.ESP_BROWNOUT_DET -or
     -not $config.ESP_INT_WDT -or -not $config.ESP_TASK_WDT_EN -or -not $config.ESP_TASK_WDT_INIT -or

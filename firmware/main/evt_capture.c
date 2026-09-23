@@ -12,9 +12,14 @@
 #include <stdio.h>
 #include <string.h>
 
-/* This is a deliberately bounded USB bench path, not LISTEN/VAD or a battery
+/* ============================================================================
+ * EVT_USB_BENCH — 手动 USB 台架诊断工具，不是产品固件。
+ * 产品自主录音循环（BOOT/LISTEN/VAD/RECORD 状态机）见 mc100_supervisor 组件
+ * 与 product_runtime.c；本文件保留作驱动验证证据与 EVT 诊断，经构建开关启用。
+ * This is a deliberately bounded USB bench path, not LISTEN/VAD or a battery
  * safety state machine. The storage task alone owns mount, writer, and files.
- * The persistent audio task alone owns all I2S lifecycle operations. */
+ * The persistent audio task alone owns all I2S lifecycle operations.
+ * ========================================================================== */
 static portMUX_TYPE core_lock = portMUX_INITIALIZER_UNLOCKED;
 static mc100_audio_t *audio;
 static mc100_writer_t *writer;
