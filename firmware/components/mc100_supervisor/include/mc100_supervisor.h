@@ -35,5 +35,10 @@ mc100_result_t mc100_supervisor_boot(mc100_supervisor_t *supervisor);
 mc100_result_t mc100_supervisor_tick(mc100_supervisor_t *supervisor);
 mc100_state_id_t mc100_supervisor_state(
     const mc100_supervisor_t *supervisor);
+/* Read-only snapshot for diagnostics and host/target integration tests. The
+ * supervisor remains the sole owner of the writer; callers must not retain or
+ * mutate the returned structure. */
+mc100_result_t mc100_supervisor_writer_status(
+    const mc100_supervisor_t *supervisor, mc100_writer_status_t *status);
 
 #endif
