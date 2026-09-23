@@ -22,7 +22,9 @@ typedef struct {
     bool driver_is_ready;
     unsigned battery_calls;
     unsigned driver_calls;
+    unsigned close_calls;
     bool readiness_order_ok;
+    bool fail_close_once;
 } sup_fake_t;
 
 static mc100_result_t sup_fake_open_exclusive(void *ctx, const char *path,
@@ -87,6 +89,11 @@ static mc100_result_t sup_fake_truncate(void *ctx, mc100_file_t file,
 static mc100_result_t sup_fake_close(void *ctx, mc100_file_t file)
 {
     sup_fake_t *fake = ctx;
+    ++fake->close_calls;
+    if (fake->fail_close_once) {
+        fake->fail_close_once = false;
+        return MC100_IO;
+    }
     return mc100_fake_io_ops()->close(fake->storage, file);
 }
 
@@ -131,7 +138,7 @@ static bool sup_fake_battery_ready(void *ctx)
 {
     sup_fake_t *fake = ctx;
     ++fake->battery_calls;
-    if (fake->recovery_called != 1 || mc100_fake_io_log_count(fake->storage) < 2)
+    if (fake->recovery_called != 0 || mc100_fake_io_log_count(fake->storage) != 0)
         fake->readiness_order_ok = false;
     return fake->battery_is_ready;
 }
@@ -140,7 +147,8 @@ static bool sup_fake_driver_ready(void *ctx)
 {
     sup_fake_t *fake = ctx;
     ++fake->driver_calls;
-    if (fake->battery_calls != 1)
+    if (fake->battery_calls != 1 || fake->recovery_called != 1 ||
+        mc100_fake_io_log_count(fake->storage) < 2)
         fake->readiness_order_ok = false;
     return fake->driver_is_ready;
 }

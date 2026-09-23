@@ -32,8 +32,11 @@ static mc100_result_t supervisor_boot_failure(mc100_supervisor_t *supervisor,
 {
     mc100_writer_abandon(supervisor->writer,
                          MC100_FAULT_RECOVERY_REQUIRED);
-    (void)mc100_writer_release_handles(supervisor->writer);
-    return supervisor_fault(supervisor, cause);
+    mc100_result_t released = mc100_writer_release_handles(supervisor->writer);
+    mc100_result_t faulted = supervisor_fault(supervisor, cause);
+    /* A failed close leaves the writer's handle ownership intact for the
+     * quiesced adapter; expose that failure to prevent a false clean boot. */
+    return released != MC100_OK ? released : faulted;
 }
 
 static mc100_result_t supervisor_pump_event(mc100_supervisor_t *supervisor,
@@ -108,8 +111,14 @@ mc100_result_t mc100_supervisor_boot(mc100_supervisor_t *supervisor)
         mc100_state_get(supervisor->state) != MC100_BOOT)
         return MC100_INVALID;
 
-    uint64_t deadline = supervisor->deps.now_ms(supervisor->deps.clock_ctx) +
-                        UINT64_C(30000);
+    if (supervisor->deps.battery_ready == NULL ||
+        !supervisor->deps.battery_ready(supervisor->deps.battery_ctx))
+        return supervisor_boot_failure(supervisor, MC100_NOT_READY);
+
+    uint64_t now = supervisor->deps.now_ms(supervisor->deps.clock_ctx);
+    uint64_t deadline = now > UINT64_MAX - UINT64_C(30000)
+                            ? UINT64_MAX
+                            : now + UINT64_C(30000);
     mc100_recovery_report_t report;
     mc100_result_t result = mc100_recover(
         supervisor->deps.io, supervisor->deps.io_ctx, deadline,
@@ -127,9 +136,6 @@ mc100_result_t mc100_supervisor_boot(mc100_supervisor_t *supervisor)
                                        result == MC100_OK ? MC100_NOT_READY
                                                           : result);
 
-    if (supervisor->deps.battery_ready == NULL ||
-        !supervisor->deps.battery_ready(supervisor->deps.battery_ctx))
-        return supervisor_boot_failure(supervisor, MC100_NOT_READY);
     if (supervisor->deps.driver_ready == NULL ||
         !supervisor->deps.driver_ready(supervisor->deps.driver_ctx))
         return supervisor_boot_failure(supervisor, MC100_NOT_READY);

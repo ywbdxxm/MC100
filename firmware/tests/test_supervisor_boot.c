@@ -32,7 +32,7 @@ static void prepare_failure_never_enters_listen(void)
     assert(supervisor != NULL);
 
     assert(mc100_supervisor_boot(supervisor) == MC100_IO);
-    assert(fake.battery_calls == 0);
+    assert(fake.battery_calls == 1);
     assert(fake.driver_calls == 0);
     assert(mc100_supervisor_state(supervisor) == MC100_FAULT);
 
@@ -50,9 +50,45 @@ static void battery_failure_never_enters_listen(void)
     assert(supervisor != NULL);
 
     assert(mc100_supervisor_boot(supervisor) == MC100_NOT_READY);
+    assert(fake.recovery_called == 0);
+    assert(mc100_fake_io_log_count(fake.storage) == 0);
     assert(fake.battery_calls == 1);
     assert(fake.driver_calls == 0);
     assert(mc100_supervisor_state(supervisor) == MC100_FAULT);
+
+    mc100_supervisor_destroy(supervisor);
+    sup_fake_destroy(&fake);
+}
+
+static void partial_prepare_close_failure_is_returned_as_fault(void)
+{
+    sup_fake_t fake;
+    sup_fake_init(&fake);
+    mc100_fake_io_fault(fake.storage, 8, MC100_FULL, false);
+    fake.fail_close_once = true;
+    mc100_supervisor_deps_t deps = sup_fake_deps(&fake);
+    mc100_supervisor_t *supervisor = mc100_supervisor_create(&deps);
+    assert(supervisor != NULL);
+
+    assert(mc100_supervisor_boot(supervisor) == MC100_IO);
+    assert(fake.close_calls >= 2);
+    assert(mc100_supervisor_state(supervisor) == MC100_FAULT);
+
+    mc100_supervisor_destroy(supervisor);
+    sup_fake_destroy(&fake);
+}
+
+static void near_maximum_clock_does_not_wrap_recovery_deadline(void)
+{
+    sup_fake_t fake;
+    sup_fake_init(&fake);
+    fake.now = UINT64_MAX - 1;
+    mc100_supervisor_deps_t deps = sup_fake_deps(&fake);
+    mc100_supervisor_t *supervisor = mc100_supervisor_create(&deps);
+    assert(supervisor != NULL);
+
+    assert(mc100_supervisor_boot(supervisor) == MC100_OK);
+    assert(mc100_supervisor_state(supervisor) == MC100_LISTEN);
 
     mc100_supervisor_destroy(supervisor);
     sup_fake_destroy(&fake);
@@ -134,6 +170,8 @@ int main(void)
     battery_failure_never_enters_listen();
     driver_failure_never_enters_listen();
     missing_battery_gate_never_enters_listen();
+    partial_prepare_close_failure_is_returned_as_fault();
+    near_maximum_clock_does_not_wrap_recovery_deadline();
     recovery_timeout_never_enters_listen();
     recovery_io_error_never_enters_listen();
     return 0;
