@@ -44,6 +44,6 @@ python firmware/tools/mc100_com7.py download <final-filename> firmware/out/<new-
 python firmware/tools/verify_recording.py <local.wav> <local.idx>
 ```
 
-`capture` 接受 3–60 秒，只采集 PCM；`record` 接受 3–600 秒并写 SD。下载路径必须是 `firmware/out/` 下的新文件。使用匹配 IDF 环境的 Python/pyserial。产品 profile 需要稳定有效的电池 ADC；USB 无电池台架不会绕过产品电池门禁。
+`capture` 接受 3–60 秒，只采集 PCM；`record` 接受 3–600 秒并写 SD。下载路径必须是 `firmware/out/` 下的新文件。使用匹配 IDF 环境的 Python/pyserial。产品 V1 不等待电池 ADC；EVT USB 路径仍由命令触发并与产品路径分开，电池自动化延期。
 
 原始实板证据见[2026-09-19 EVT 报告](../docs/reports/2026-09-19-evt-recording.md)。
