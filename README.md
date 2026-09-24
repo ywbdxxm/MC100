@@ -4,13 +4,13 @@ MC100 是一块基于 ESP32-S3-MINI-1-N8 的便携录音板：PDM 麦克风采�
 
 ## 当前目标
 
-当前只整理并验证 V1 的本地录音链路：
+当前只整理并验证 V1 的本地录音链路。产品模式上电自动录音 600 秒，随后停录并保持 IDLE：
 
 ```text
-上电 → PDM 采集 → 16 kHz / 16-bit / mono PCM → microSD → WAV 文件
+上电 → PDM 采集 → 有界 PCM 队列 → 现有 writer → microSD → 两个约 5 分钟 WAV/IDX 段 → IDLE
 ```
 
-自动 VAD、2 秒预录、低电保护和掉电恢复已有部分代码，但尚未作为产品能力完成实板验证；无线回传留到后续。当前先把本地连续录音稳定下来。
+录音策略和 30,000 帧（约 600 秒）上限见 [recorder-session policy](firmware/components/mc100_recorder/include/mc100_record_session.h)。自动 VAD、2 秒预录、低电自动化、无线回传和真实掉电恢复保留供后续规划，当前不在产品入口中。
 
 ## 硬件事实
 
@@ -28,8 +28,8 @@ MC100 是一块基于 ESP32-S3-MINI-1-N8 的便携录音板：PDM 麦克风采�
 ## 当前软件状态
 
 - EVT 台架固件已经在 COM7、USB 供电、64 GB exFAT 卡上完成 PDM 采集、WAV/索引写入、轮换和 CRC 读回。
-- Host 侧已有音频、WAV、存储、恢复和 supervisor 测试。
-- 产品 supervisor 和 ESP-IDF 运行时已经写入仓库，但尚未在 COM7 完成完整产品循环 smoke。
+- Host 默认测试覆盖 V1 录音策略、帧组装、WAV、存储和 CRC；supervisor 等旧运行时测试仅在 future profile 中保留。
+- 产品 profile 已切换为 boot → PDM → writer → 600 秒 → IDLE；已通过锁定 ESP-IDF v6.1 构建，但尚未在 COM7 完成产品循环 smoke。
 - 40 MHz PDM 启动实验失败；DFS 下 PDM 活跃时实际为 80 MHz。
 - esp-sr VADNet1 medium 在无 PSRAM 板上的当前 runtime 初始化因内存耗尽失败；VAD 尚未定型。
 - 真实声学、电池电流、长期耐久、真断电和多卡验证尚未放行。

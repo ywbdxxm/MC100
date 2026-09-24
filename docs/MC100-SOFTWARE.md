@@ -14,11 +14,12 @@ PDM → PCM → WAV → microSD
 
 | 目录 | 作用 | 当前判断 |
 | --- | --- | --- |
-| `components/mc100_platform_espidf` | I2S PDM、SD/FAT、板级 IO、产品运行时 | 目标适配层 |
+| `components/mc100_platform_espidf` | I2S PDM、SD/FAT、板级 IO | 目标适配层 |
 | `components/mc100_audio` | PCM 帧组装、预录银行、有界队列、VAD 接口 | 可复用核心；VAD 仍是占位 |
 | `components/mc100_storage` | WAV、索引、CRC、写入和恢复 | 已有较完整实现，实板仍需验证 |
 | `components/mc100_core` | 状态机、电池策略、上传 no-op 接口 | 状态机偏产品化，上传接口暂不使用 |
-| `components/mc100_supervisor` | 录音生命周期编排 | 已有 Host 测试，尚未完成产品实板 smoke |
+| `components/mc100_supervisor` | 旧录音生命周期编排 | 保留供 future profile，不在默认产品图中 |
+| `components/mc100_recorder` | 600 秒录音 session 策略 | 默认产品路径；策略见 [`mc100_record_session.h`](../firmware/components/mc100_recorder/include/mc100_record_session.h) |
 | `main/evt_capture.c` | 手动 USB 台架工具 | 保留作 EVT 诊断，不是最终产品流程 |
 | `host/`、`tests/` | Host 假 IO、格式/故障/生命周期测试 | 测试资产，不是固件功能 |
 
@@ -26,13 +27,13 @@ PDM → PCM → WAV → microSD
 
 EVT 路径用于确定性验证：由 USB 命令启动采集或录音，写 WAV 和索引，再由工具下载、校验和读回。
 
-产品路径已经有 `app_main`、`product_runtime` 和 supervisor，但尚未在 COM7 完成以下完整链路：
+默认产品路径由 `app_main` 启动 `record_loop`，上电后自动录音：
 
 ```text
-BOOT → LISTEN → RECORD → CLOSE → LISTEN
+BOOT → PDM/PCM → WAV/IDX writer → 600 s → CLOSE → IDLE
 ```
 
-当前产品运行时的 VAD 是固定序号占位实现，不是最终语音 VAD。
+每帧 20 ms，session 接受 30,000 帧（约 600 秒）；现有 writer 约 5 分钟轮换，因此正常运行预期得到两个 clean WAV/IDX 对，可能保留一个 reserve `.part` 对。EVT USB 命令入口独立保留作诊断，不是产品流程。VAD、预录、电池自动化、无线和真实掉电恢复均延期。
 
 ## 4. 代码复杂度边界
 
@@ -68,12 +69,14 @@ Host：在 MSVC Developer PowerShell 中运行：
 
 ```powershell
 pwsh -File firmware/tools/test-host.ps1 -Clean
+pwsh -File firmware/tools/test-host.ps1 -Clean -FutureRuntimeTests
 ```
 
 Target：在项目锁定的 ESP-IDF v6.1 环境中运行：
 
 ```powershell
 pwsh -File firmware/tools/build.ps1 -Profile evt -Clean
+pwsh -File firmware/tools/build.ps1 -Profile product -Clean
 ```
 
 只在明确需要产品路径时构建 `product` profile。不要混用 SDK、Python、CMake 或 Ninja 环境。

@@ -10,8 +10,8 @@
 | PDM 采集 | EVT PASS @80 MHz | 约 10 秒、501 帧、0 timeout/error |
 | WAV/索引/CRC | HOST PASS | 格式边界、损坏拒绝、CRC 和 Python WAV 互操作已测 |
 | SD 录音写入 | EVT PASS（单卡） | 64 GB exFAT，3 秒及约 305 秒记录读回通过 |
-| Host 生命周期测试 | HISTORICAL PASS | supervisor、存储、恢复测试已注册；本次文档整理未重跑测试 |
-| 产品 BOOT→LISTEN→RECORD→CLOSE | NOT RUN | 产品固件尚未在 COM7 完整 smoke |
+| Host 默认 V1 套件 | PASS (16/16) | MSVC Host profile；future-runtime 测试另行选择，不代表实板 |
+| 产品 boot → 600 s record → idle | NOT RUN | v6.1 product 构建已通过；COM7 产品闭环尚未运行。正常运行预期两个 clean WAV/IDX 对，可能保留 reserve `.wav.part/.idx.part` 对 |
 | VAD 选型 | OPEN | libfvad 有 80 MHz 工程探针；esp-sr 当前 runtime 内存失败 |
 | 40 MHz PDM | BLOCKED | 固定 40 MHz 在 PDM 启动阶段触发 Task WDT；DFS 活跃为 80 MHz |
 | 真断电/扇区故障 | NOT RUN/BLOCKED | 恢复核心有 Host 测试，真实卡门禁未关闭 |
@@ -61,5 +61,17 @@
 - Host 测试通过只说明可移植逻辑通过。
 - Target 构建通过只说明固件可构建。
 - EVT 台架录音通过只说明台架路径在指定卡上工作。
+- 产品 boot → 600 s → idle 只有在 COM7 实板日志和读卡器校验完成后才能提升状态；当前保持 `NOT RUN`。
 - 声学、电池、真断电和长期耐久必须有独立实板记录。
 - 不把估算、电流预算或文档中的目标写成实测 PASS。
+
+## 5. 可复现命令
+
+```powershell
+pwsh -File firmware/tools/test-host.ps1 -Clean
+pwsh -File firmware/tools/test-host.ps1 -Clean -FutureRuntimeTests
+pwsh -File firmware/tools/build.ps1 -Profile product -Clean
+pwsh -File firmware/tools/build.ps1 -Profile evt -Clean
+```
+
+默认 Host 套件是 V1 录音路径；`-FutureRuntimeTests` 仅验证保留的旧运行时。上述构建结果不替代 COM7 和 SD 卡物理证据。
