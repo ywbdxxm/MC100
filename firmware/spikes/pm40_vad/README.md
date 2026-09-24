@@ -79,10 +79,10 @@ with `VADNet1 medium` enabled for `esp32s3`. The generated configuration has no
 `CONFIG_SPIRAM`; the probe requests `AFE_MEMORY_ALLOC_MORE_INTERNAL`. The
 target image build **PASS**ed: model packing reported `vadnet1_medium` at
 281.16 KiB, `mc100_esp_sr_probe.bin` was generated (0x846a0 bytes), and the
-3 MiB app partition retained 83% free. Full output is retained in
-[`esp-sr-probe-c3-rerun-after-spiram.log`](../../../firmware/out/phase1-evidence/esp-sr-probe-c3-rerun-after-spiram.log)
-and the ignored image artifacts are under
-[`esp-sr-probe-c3-artifacts`](../../../firmware/out/phase1-evidence/esp-sr-probe-c3-artifacts).
+3 MiB app partition retained 83% free. The original log and image artifacts
+were generated under the ignored local
+path `firmware/out/phase1-evidence/`; those artifacts are not retained in this
+checkout.
 
 The target image was then flashed and monitored on **COM7 only**. Model
 discovery succeeded, but the selected no-PSRAM configuration could not create
@@ -99,8 +99,9 @@ Guru Meditation Error: Core 0 panic'ed (StoreProhibited)
 Runtime status is **INIT FAIL / BLOCKED**. The decoded backtrace is
 `flash_model_info` → `model_create` → `afe_init_vad` →
 `afe_create_from_config` → `app_main`; no AFE success, frame latency, stack
-high-water mark, or PDM-fed VAD result was obtained. Full evidence is in
-[`esp-sr-runtime-com7-20260923.log`](../../../firmware/out/phase1-evidence/esp-sr-runtime-com7-20260923.log).
+high-water mark, or PDM-fed VAD result was obtained. The runtime log was
+generated under the ignored local path
+`firmware/out/phase1-evidence/`; it is not retained in this checkout.
 This is a failure of this `vadnet1_medium` / `AFE_MEMORY_ALLOC_MORE_INTERNAL`
 / no-PSRAM tuple, not proof that every esp-sr model or memory strategy is
 impossible. Windows MAX_PATH required a short temporary build path, which does
