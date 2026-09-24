@@ -29,7 +29,7 @@ void mc100_record_session_start(mc100_record_session_t *session,
 
 bool mc100_record_session_can_enqueue(
     const mc100_record_session_t *session) {
-    return valid(session) && session->started && !session->producer_quiesced &&
+    return valid(session) && !session->producer_quiesced &&
            !session->faulted &&
            session->enqueued_frames < session->target_frames;
 }
