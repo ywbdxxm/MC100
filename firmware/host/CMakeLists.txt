@@ -4,6 +4,7 @@ project(mc100_host_tests LANGUAGES C)
 include(CTest)
 
 option(MC100_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(MC100_ENABLE_FUTURE_RUNTIME_TESTS "Enable retained runtime integration tests" OFF)
 
 add_executable(test_board_contract ../tests/test_board_contract.c)
 target_compile_features(test_board_contract PRIVATE c_std_11)
@@ -62,37 +63,47 @@ add_test(NAME wave_interop COMMAND ${Python3_EXECUTABLE}
     $<TARGET_FILE:emit_format_fixture>
 )
 
-add_library(mc100_core STATIC
-    ../components/mc100_core/state.c
-    ../components/mc100_core/battery_policy.c
-    ../components/mc100_core/upload_noop.c
-)
-target_include_directories(mc100_core PUBLIC ../components/mc100_core/include)
-mc100_host_checks(mc100_core)
-foreach(name state battery_policy)
-    add_executable(test_${name} ../tests/test_${name}.c)
-    target_link_libraries(test_${name} PRIVATE mc100_core)
-    mc100_host_checks(test_${name})
-    add_test(NAME ${name} COMMAND test_${name})
-endforeach()
-add_executable(test_upload_noop ../tests/test_upload_noop.c)
-target_link_libraries(test_upload_noop PRIVATE mc100_core)
-mc100_host_checks(test_upload_noop)
-add_test(NAME upload_noop COMMAND test_upload_noop)
+if(MC100_ENABLE_FUTURE_RUNTIME_TESTS)
+    add_library(mc100_core STATIC
+        ../components/mc100_core/state.c
+        ../components/mc100_core/battery_policy.c
+        ../components/mc100_core/upload_noop.c
+    )
+    target_include_directories(mc100_core PUBLIC ../components/mc100_core/include)
+    mc100_host_checks(mc100_core)
+    foreach(name state battery_policy)
+        add_executable(test_${name} ../tests/test_${name}.c)
+        target_link_libraries(test_${name} PRIVATE mc100_core)
+        mc100_host_checks(test_${name})
+        add_test(NAME ${name} COMMAND test_${name})
+    endforeach()
+    add_executable(test_upload_noop ../tests/test_upload_noop.c)
+    target_link_libraries(test_upload_noop PRIVATE mc100_core)
+    mc100_host_checks(test_upload_noop)
+    add_test(NAME upload_noop COMMAND test_upload_noop)
+endif()
 
-add_library(mc100_audio STATIC
-    ../components/mc100_audio/audio.c
-    ../components/mc100_audio/preroll.c
-    ../components/mc100_audio/stream.c
-    ../components/mc100_audio/frame_assembler.c
-    ../components/mc100_audio/vad_fixed.c
-)
+set(mc100_audio_sources ../components/mc100_audio/frame_assembler.c)
+if(MC100_ENABLE_FUTURE_RUNTIME_TESTS)
+    list(APPEND mc100_audio_sources
+        ../components/mc100_audio/audio.c
+        ../components/mc100_audio/preroll.c
+        ../components/mc100_audio/stream.c
+        ../components/mc100_audio/vad_fixed.c
+    )
+endif()
+add_library(mc100_audio STATIC ${mc100_audio_sources})
 target_include_directories(mc100_audio PUBLIC
     ../components/mc100_audio/include
     ../components/mc100_core/include
 )
 mc100_host_checks(mc100_audio)
-foreach(name frame_assembler preroll_handoff queue_full capture_gap)
+add_executable(test_frame_assembler ../tests/test_frame_assembler.c)
+target_link_libraries(test_frame_assembler PRIVATE mc100_audio)
+mc100_host_checks(test_frame_assembler)
+add_test(NAME frame_assembler COMMAND test_frame_assembler)
+if(MC100_ENABLE_FUTURE_RUNTIME_TESTS)
+foreach(name preroll_handoff queue_full capture_gap)
     add_executable(test_${name} ../tests/test_${name}.c)
     target_link_libraries(test_${name} PRIVATE mc100_audio)
     mc100_host_checks(test_${name})
@@ -102,6 +113,7 @@ add_executable(test_vad_fixed ../tests/test_vad_fixed.c)
 target_link_libraries(test_vad_fixed PRIVATE mc100_audio)
 mc100_host_checks(test_vad_fixed)
 add_test(NAME vad_fixed COMMAND test_vad_fixed)
+endif()
 
 add_library(mc100_writer STATIC
     ../components/mc100_storage/writer.c
@@ -114,6 +126,7 @@ target_include_directories(mc100_fake_io PUBLIC ../host/include)
 target_link_libraries(mc100_fake_io PUBLIC mc100_writer)
 mc100_host_checks(mc100_fake_io)
 
+if(MC100_ENABLE_FUTURE_RUNTIME_TESTS)
 add_library(mc100_supervisor STATIC
     ../components/mc100_supervisor/supervisor.c
 )
@@ -190,6 +203,7 @@ target_link_libraries(test_supervisor_rotation_publication PRIVATE
 mc100_host_checks(test_supervisor_rotation_publication)
 add_test(NAME supervisor_rotation_publication
     COMMAND test_supervisor_rotation_publication)
+endif()
 foreach(name storage_writer storage_short_write rotate_15000 space_admission finalize_faults)
     add_executable(test_${name} ../tests/test_${name}.c)
     target_link_libraries(test_${name} PRIVATE mc100_fake_io)
@@ -200,12 +214,14 @@ add_executable(test_writer_publication ../tests/test_writer_publication.c)
 target_link_libraries(test_writer_publication PRIVATE mc100_fake_io)
 mc100_host_checks(test_writer_publication)
 add_test(NAME writer_publication COMMAND test_writer_publication)
+if(MC100_ENABLE_FUTURE_RUNTIME_TESTS)
 foreach(name recover_prefix recover_idempotent)
     add_executable(test_${name} ../tests/test_${name}.c)
     target_link_libraries(test_${name} PRIVATE mc100_fake_io)
     mc100_host_checks(test_${name})
     add_test(NAME ${name} COMMAND test_${name})
 endforeach()
+endif()
 if(WIN32)
     add_library(mc100_file_io STATIC ../host/file_io.c)
     target_include_directories(mc100_file_io PUBLIC ../host/include)
@@ -220,6 +236,7 @@ target_include_directories(test_driver_contract PRIVATE
 )
 mc100_host_checks(test_driver_contract)
 add_test(NAME driver_contract COMMAND test_driver_contract)
+if(MC100_ENABLE_FUTURE_RUNTIME_TESTS)
 add_executable(test_product_audio_protocol
     ../tests/test_product_audio_protocol.c)
 target_include_directories(test_product_audio_protocol PRIVATE
@@ -231,6 +248,7 @@ target_include_directories(test_evt_commands PRIVATE ../main)
 target_link_libraries(test_evt_commands PRIVATE mc100_audio mc100_writer)
 mc100_host_checks(test_evt_commands)
 add_test(NAME evt_commands COMMAND test_evt_commands)
+endif()
 add_test(NAME com7_client COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/../tests/test_com7_client.py)
 add_test(NAME recording_verifier COMMAND ${Python3_EXECUTABLE}

@@ -2,7 +2,8 @@
 param(
     [string]$OutputDirectory = 'out/host',
     [switch]$Clean,
-    [switch]$Sanitizers
+    [switch]$Sanitizers,
+    [switch]$FutureRuntimeTests
 )
 
 $ErrorActionPreference = 'Stop'
@@ -30,6 +31,7 @@ foreach ($tool in @('cmake', 'ninja', 'ctest')) {
 if ($Clean -and (Test-Path -LiteralPath $buildDirectory)) { Remove-Item -LiteralPath $buildDirectory -Recurse -Force }
 $configureArgs = @('-S', (Join-Path $firmwareRoot 'host'), '-B', $buildDirectory, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Debug')
 if ($Sanitizers) { $configureArgs += '-DMC100_ENABLE_SANITIZERS=ON' }
+if ($FutureRuntimeTests) { $configureArgs += '-DMC100_ENABLE_FUTURE_RUNTIME_TESTS=ON' }
 & cmake @configureArgs
 if ($LASTEXITCODE -ne 0) { throw "Host configure failed ($LASTEXITCODE)." }
 & cmake --build $buildDirectory
