@@ -52,8 +52,8 @@ BOOT → PDM/PCM → WAV/IDX writer → 600 s → CLOSE → IDLE
 
 - 40 MHz PDM 启动实验未通过；DFS 活跃点为 80 MHz。
 - esp-sr VADNet1 medium 当前无 PSRAM runtime 初始化失败；没有完成 VAD 选型。
-- 产品运行时尚未通过 COM7 完整 BOOT 到 LISTEN/RECORD/CLOSE smoke。
-- 真断电、扇区级故障、多卡、声学、电池和长期耐久均未放行。
+- 产品运行时尚未通过 COM7 完整 boot → 600 s continuous record → IDLE smoke。
+- 真断电恢复仍延期；扇区级故障、多卡、声学、电池和长期耐久均未放行。
 
 ## 6. 保留的安全规则
 

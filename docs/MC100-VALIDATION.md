@@ -14,7 +14,8 @@
 | 产品 boot → 600 s record → idle | NOT RUN | v6.1 product 构建已通过；COM7 产品闭环尚未运行。正常运行预期两个 clean WAV/IDX 对，可能保留 reserve `.wav.part/.idx.part` 对 |
 | VAD 选型 | OPEN | libfvad 有 80 MHz 工程探针；esp-sr 当前 runtime 内存失败 |
 | 40 MHz PDM | BLOCKED | 固定 40 MHz 在 PDM 启动阶段触发 Task WDT；DFS 活跃为 80 MHz |
-| 真断电/扇区故障 | NOT RUN/BLOCKED | 恢复核心有 Host 测试，真实卡门禁未关闭 |
+| 真断电恢复 | DEFERRED | 不在当前 V1 产品验收范围；恢复核心仅有 Host 测试 |
+| 扇区级故障 | NOT RUN | 真实卡故障注入和门禁尚未完成 |
 | 电池、功耗、声学、耐久 | NOT RUN | 尚无发布结论 |
 | 无线回传 | DEFERRED | 当前不启用，不进入本阶段验收 |
 
