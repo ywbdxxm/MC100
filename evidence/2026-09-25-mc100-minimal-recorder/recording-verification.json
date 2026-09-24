@@ -1,0 +1,626 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-09-24T21:25:14.799950+00:00",
+  "status": "PARTIAL PASS",
+  "scope": "MC100 minimal recorder verification; no acoustic, battery, wireless, endurance or power-loss claim",
+  "source_commit": "23b4c4c",
+  "sdk_commit": "fff9895c82d744c7237be8847347bdd1b07c6643",
+  "environment": {
+    "activation": "C:/Espressif/tools/Microsoft.v6.1.PowerShell_profile.ps1",
+    "tools_root": "C:/Espressif/tools",
+    "python_env": "C:/Espressif/tools/python/v6.1/venv",
+    "python_version": "3.14.7",
+    "target_compiler_version": "15.2.0 esp-15.2.0_20251204",
+    "cmake": "4.0.3",
+    "ninja": "1.12.1",
+    "esptool": "5.4.0",
+    "pyserial": "3.5",
+    "host_compiler": "MSVC 19.44.35228.0",
+    "host_future_runtime_tests": false
+  },
+  "builds": {
+    "product": {
+      "status": "PASS",
+      "target": "esp32s3",
+      "sdk_version": "v6.1",
+      "project_version": "t06-recovery-blocked-20260919-40-g23b4c4c",
+      "idf_path": "C:/esp/v6.1/esp-idf",
+      "compiler": "C:/Espressif/tools/xtensa-esp-elf/esp-15.2.0_20251204/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc.exe",
+      "application": {
+        "path": "firmware/out/target/mc100.bin",
+        "bytes": 305520,
+        "sha256": "1bc1531a697c606be49ec129446cbf9b66a316011174092573c96710748164e6"
+      },
+      "elf": {
+        "path": "firmware/out/target/mc100.elf",
+        "bytes": 4988444,
+        "sha256": "78f1f4c9c9bad516ee9b7aa9791694c31a69ac5646bd0f42232fe4c7c03fdd1c"
+      },
+      "component_count": 72,
+      "components": [
+        "app_update",
+        "bootloader",
+        "bootloader_support",
+        "cxx",
+        "efuse",
+        "esp_adc",
+        "esp_app_format",
+        "esp_blockdev",
+        "esp_bootloader_format",
+        "esp_common",
+        "esp_driver_dma",
+        "esp_driver_gpio",
+        "esp_driver_i2s",
+        "esp_driver_sd_intf",
+        "esp_driver_sdmmc",
+        "esp_driver_sdspi",
+        "esp_driver_spi",
+        "esp_driver_uart",
+        "esp_driver_usb_serial_jtag",
+        "esp_hal_ana_conv",
+        "esp_hal_clock",
+        "esp_hal_dma",
+        "esp_hal_gpio",
+        "esp_hal_gpspi",
+        "esp_hal_i2s",
+        "esp_hal_mspi",
+        "esp_hal_pmu",
+        "esp_hal_regi2c",
+        "esp_hal_rtc_timer",
+        "esp_hal_sd",
+        "esp_hal_security",
+        "esp_hal_systimer",
+        "esp_hal_timg",
+        "esp_hal_touch_sens",
+        "esp_hal_uart",
+        "esp_hal_usb",
+        "esp_hal_wdt",
+        "esp_hw_support",
+        "esp_libc",
+        "esp_mm",
+        "esp_partition",
+        "esp_pm",
+        "esp_psram",
+        "esp_ringbuf",
+        "esp_rom",
+        "esp_security",
+        "esp_stdio",
+        "esp_system",
+        "esp_timer",
+        "esp_usb_cdc_rom_console",
+        "esptool_py",
+        "fatfs",
+        "freertos",
+        "hal",
+        "heap",
+        "log",
+        "main",
+        "mbedtls",
+        "mc100_audio",
+        "mc100_board",
+        "mc100_core",
+        "mc100_platform_espidf",
+        "mc100_recorder",
+        "mc100_storage",
+        "partition_table",
+        "pthread",
+        "sdmmc",
+        "soc",
+        "spi_flash",
+        "vfs",
+        "wear_levelling",
+        "xtensa"
+      ],
+      "project_sources": {
+        "main": [
+          "app_main.c",
+          "record_loop.c"
+        ],
+        "mc100_audio": [
+          "frame_assembler.c"
+        ],
+        "mc100_board": [],
+        "mc100_core": [],
+        "mc100_platform_espidf": [
+          "audio_i2s.c",
+          "sd_fat.c",
+          "board_io.c"
+        ],
+        "mc100_recorder": [
+          "record_session.c"
+        ],
+        "mc100_storage": [
+          "crc32.c",
+          "wav.c",
+          "journal.c",
+          "writer.c",
+          "recovery.c"
+        ]
+      },
+      "cpu_mhz": 80,
+      "flash_size": "8MB",
+      "spiram_enabled": false,
+      "product_enabled": true,
+      "legacy_runtime_enabled": false,
+      "memory": {
+        "version": "1.2",
+        "total_size": 305409,
+        "layout": [
+          {
+            "name": "Flash Code",
+            "total": 0,
+            "used": 178590,
+            "free": 0,
+            "parts": {
+              ".text": {
+                "size": 178590
+              }
+            }
+          },
+          {
+            "name": "DIRAM",
+            "total": 341760,
+            "used": 119963,
+            "free": 221797,
+            "parts": {
+              ".bss": {
+                "size": 70288
+              },
+              ".text": {
+                "size": 36915
+              },
+              ".data": {
+                "size": 12760
+              }
+            }
+          },
+          {
+            "name": "Flash Data",
+            "total": 0,
+            "used": 60724,
+            "free": 0,
+            "parts": {
+              ".rodata": {
+                "size": 60452
+              },
+              ".appdesc": {
+                "size": 256
+              },
+              ".tdata": {
+                "size": 16
+              }
+            }
+          },
+          {
+            "name": "IRAM",
+            "total": 16384,
+            "used": 16384,
+            "free": 0,
+            "parts": {
+              ".text": {
+                "size": 15356
+              },
+              ".vectors": {
+                "size": 1028
+              }
+            }
+          },
+          {
+            "name": "RTC SLOW",
+            "total": 8192,
+            "used": 36,
+            "free": 8156,
+            "parts": {
+              ".force_slow": {
+                "size": 36
+              }
+            }
+          },
+          {
+            "name": "RTC FAST",
+            "total": 8192,
+            "used": 24,
+            "free": 8168,
+            "parts": {
+              ".rtc_reserved": {
+                "size": 24
+              }
+            }
+          }
+        ]
+      },
+      "command": "pwsh -File firmware/tools/build.ps1 -Profile product -Clean",
+      "log": {
+        "path": ".superpowers/sdd/2026-09-25-mc100-minimal-recorder/task-6-product-build.log",
+        "bytes": 103503,
+        "sha256": "95d617508f6e810ce55e97f5afb92dc17daa90838ea6c10a8144c2d004dd7398"
+      }
+    },
+    "evt": {
+      "status": "PASS",
+      "target": "esp32s3",
+      "sdk_version": "v6.1",
+      "project_version": "t06-recovery-blocked-20260919-40-g23b4c4c",
+      "idf_path": "C:/esp/v6.1/esp-idf",
+      "compiler": "C:/Espressif/tools/xtensa-esp-elf/esp-15.2.0_20251204/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc.exe",
+      "application": {
+        "path": "firmware/out/target-evt/mc100.bin",
+        "bytes": 317744,
+        "sha256": "ff3fc2ffa3d97c7e369c1e3bf2531ad024f470f3ff6408009f338b754dbba035"
+      },
+      "elf": {
+        "path": "firmware/out/target-evt/mc100.elf",
+        "bytes": 5096976,
+        "sha256": "5d30a9a3305d7fc8bebde5cc6691bdbf59b0f0b2a9ec43f2b0488999d337676b"
+      },
+      "component_count": 72,
+      "components": [
+        "app_update",
+        "bootloader",
+        "bootloader_support",
+        "cxx",
+        "efuse",
+        "esp_adc",
+        "esp_app_format",
+        "esp_blockdev",
+        "esp_bootloader_format",
+        "esp_common",
+        "esp_driver_dma",
+        "esp_driver_gpio",
+        "esp_driver_i2s",
+        "esp_driver_sd_intf",
+        "esp_driver_sdmmc",
+        "esp_driver_sdspi",
+        "esp_driver_spi",
+        "esp_driver_uart",
+        "esp_driver_usb_serial_jtag",
+        "esp_hal_ana_conv",
+        "esp_hal_clock",
+        "esp_hal_dma",
+        "esp_hal_gpio",
+        "esp_hal_gpspi",
+        "esp_hal_i2s",
+        "esp_hal_mspi",
+        "esp_hal_pmu",
+        "esp_hal_regi2c",
+        "esp_hal_rtc_timer",
+        "esp_hal_sd",
+        "esp_hal_security",
+        "esp_hal_systimer",
+        "esp_hal_timg",
+        "esp_hal_touch_sens",
+        "esp_hal_uart",
+        "esp_hal_usb",
+        "esp_hal_wdt",
+        "esp_hw_support",
+        "esp_libc",
+        "esp_mm",
+        "esp_partition",
+        "esp_pm",
+        "esp_psram",
+        "esp_ringbuf",
+        "esp_rom",
+        "esp_security",
+        "esp_stdio",
+        "esp_system",
+        "esp_timer",
+        "esp_usb_cdc_rom_console",
+        "esptool_py",
+        "fatfs",
+        "freertos",
+        "hal",
+        "heap",
+        "log",
+        "main",
+        "mbedtls",
+        "mc100_audio",
+        "mc100_board",
+        "mc100_core",
+        "mc100_platform_espidf",
+        "mc100_recorder",
+        "mc100_storage",
+        "partition_table",
+        "pthread",
+        "sdmmc",
+        "soc",
+        "spi_flash",
+        "vfs",
+        "wear_levelling",
+        "xtensa"
+      ],
+      "project_sources": {
+        "main": [
+          "app_main.c",
+          "evt_capture.c",
+          "evt_commands.c"
+        ],
+        "mc100_audio": [
+          "frame_assembler.c",
+          "audio.c",
+          "preroll.c",
+          "stream.c",
+          "vad_fixed.c"
+        ],
+        "mc100_board": [],
+        "mc100_core": [
+          "state.c",
+          "battery_policy.c",
+          "upload_noop.c"
+        ],
+        "mc100_platform_espidf": [
+          "audio_i2s.c",
+          "sd_fat.c",
+          "board_io.c"
+        ],
+        "mc100_recorder": [
+          "record_session.c"
+        ],
+        "mc100_storage": [
+          "crc32.c",
+          "wav.c",
+          "journal.c",
+          "writer.c",
+          "recovery.c"
+        ]
+      },
+      "cpu_mhz": 80,
+      "flash_size": "8MB",
+      "spiram_enabled": false,
+      "product_enabled": false,
+      "legacy_runtime_enabled": false,
+      "memory": {
+        "version": "1.2",
+        "total_size": 317625,
+        "layout": [
+          {
+            "name": "Flash Code",
+            "total": 0,
+            "used": 187726,
+            "free": 0,
+            "parts": {
+              ".text": {
+                "size": 187726
+              }
+            }
+          },
+          {
+            "name": "Flash Data",
+            "total": 0,
+            "used": 63772,
+            "free": 0,
+            "parts": {
+              ".rodata": {
+                "size": 63500
+              },
+              ".appdesc": {
+                "size": 256
+              },
+              ".tdata": {
+                "size": 16
+              }
+            }
+          },
+          {
+            "name": "DIRAM",
+            "total": 341760,
+            "used": 57731,
+            "free": 284029,
+            "parts": {
+              ".text": {
+                "size": 36947
+              },
+              ".data": {
+                "size": 12760
+              },
+              ".bss": {
+                "size": 8024
+              }
+            }
+          },
+          {
+            "name": "IRAM",
+            "total": 16384,
+            "used": 16384,
+            "free": 0,
+            "parts": {
+              ".text": {
+                "size": 15356
+              },
+              ".vectors": {
+                "size": 1028
+              }
+            }
+          },
+          {
+            "name": "RTC SLOW",
+            "total": 8192,
+            "used": 36,
+            "free": 8156,
+            "parts": {
+              ".force_slow": {
+                "size": 36
+              }
+            }
+          },
+          {
+            "name": "RTC FAST",
+            "total": 8192,
+            "used": 24,
+            "free": 8168,
+            "parts": {
+              ".rtc_reserved": {
+                "size": 24
+              }
+            }
+          }
+        ]
+      },
+      "command": "pwsh -File firmware/tools/build.ps1 -Profile evt -OutputDirectory out/target-evt -Clean",
+      "log": {
+        "path": ".superpowers/sdd/2026-09-25-mc100-minimal-recorder/task-6-evt-build.log",
+        "bytes": 104423,
+        "sha256": "2fa786cc8980cdaa8925ecd417d9c9c072fb43e8b8483b8ce9ef25a47f43f0f1"
+      }
+    }
+  },
+  "host": {
+    "status": "PASS",
+    "default_tests": 16,
+    "default_failed": 0,
+    "focused_tests": 4,
+    "ctest_output": "Test project C:/Users/ljm75/Desktop/AI-HRADWARE/MC100/firmware/out/host\n      Start  1: board_contract\n 1/16 Test  #1: board_contract ...................   Passed    0.01 sec\n      Start  2: wav\n 2/16 Test  #2: wav ..............................   Passed    0.01 sec\n      Start  3: journal_codec\n 3/16 Test  #3: journal_codec ....................   Passed    0.06 sec\n      Start  4: wave_interop\n 4/16 Test  #4: wave_interop .....................   Passed    0.14 sec\n      Start  5: record_session\n 5/16 Test  #5: record_session ...................   Passed    0.01 sec\n      Start  6: frame_assembler\n 6/16 Test  #6: frame_assembler ..................   Passed    0.01 sec\n      Start  7: record_assembler_gap\n 7/16 Test  #7: record_assembler_gap .............   Passed    0.01 sec\n      Start  8: storage_writer\n 8/16 Test  #8: storage_writer ...................   Passed    0.47 sec\n      Start  9: storage_short_write\n 9/16 Test  #9: storage_short_write ..............   Passed    0.07 sec\n      Start 10: rotate_15000\n10/16 Test #10: rotate_15000 .....................   Passed    1.28 sec\n      Start 11: space_admission\n11/16 Test #11: space_admission ..................   Passed    0.01 sec\n      Start 12: finalize_faults\n12/16 Test #12: finalize_faults ..................   Passed    0.14 sec\n      Start 13: writer_publication\n13/16 Test #13: writer_publication ...............   Passed    0.41 sec\n      Start 14: driver_contract\n14/16 Test #14: driver_contract ..................   Passed    0.01 sec\n      Start 15: com7_client\n15/16 Test #15: com7_client ......................   Passed    0.18 sec\n      Start 16: recording_verifier\n16/16 Test #16: recording_verifier ...............   Passed    0.52 sec\n\n100% tests passed, 0 tests failed out of 16\n\nTotal Test time (real) =   3.35 sec\n",
+    "focused_fault_output": "UpdateCTestConfiguration  from :C:/Users/ljm75/Desktop/AI-HRADWARE/MC100/firmware/out/host/DartConfiguration.tcl\nParse Config file:C:/Users/ljm75/Desktop/AI-HRADWARE/MC100/firmware/out/host/DartConfiguration.tcl\nTest project C:/Users/ljm75/Desktop/AI-HRADWARE/MC100/firmware/out/host\nConstructing a list of tests\nDone constructing a list of tests\nUpdating test list for fixtures\nAdded 0 tests to meet fixture requirements\nChecking test dependency graph...\nChecking test dependency graph end\ntest 5\n    Start  5: record_session\n\n5: Test command: C:\\Users\\ljm75\\Desktop\\AI-HRADWARE\\MC100\\firmware\\out\\host\\test_record_session.exe\n5: Working Directory: C:/Users/ljm75/Desktop/AI-HRADWARE/MC100/firmware/out/host\n5: Test timeout computed to be: 1500\n5: record_session: lifecycle policy PASS\n1/4 Test  #5: record_session ...................   Passed    0.01 sec\ntest 9\n    Start  9: storage_short_write\n\n9: Test command: C:\\Users\\ljm75\\Desktop\\AI-HRADWARE\\MC100\\firmware\\out\\host\\test_storage_short_write.exe\n9: Working Directory: C:/Users/ljm75/Desktop/AI-HRADWARE/MC100/firmware/out/host\n9: Test timeout computed to be: 1500\n2/4 Test  #9: storage_short_write ..............   Passed    0.08 sec\ntest 11\n    Start 11: space_admission\n\n11: Test command: C:\\Users\\ljm75\\Desktop\\AI-HRADWARE\\MC100\\firmware\\out\\host\\test_space_admission.exe\n11: Working Directory: C:/Users/ljm75/Desktop/AI-HRADWARE/MC100/firmware/out/host\n11: Test timeout computed to be: 1500\n3/4 Test #11: space_admission ..................   Passed    0.02 sec\ntest 12\n    Start 12: finalize_faults\n\n12: Test command: C:\\Users\\ljm75\\Desktop\\AI-HRADWARE\\MC100\\firmware\\out\\host\\test_finalize_faults.exe\n12: Working Directory: C:/Users/ljm75/Desktop/AI-HRADWARE/MC100/firmware/out/host\n12: Test timeout computed to be: 1500\n12: finalize_faults: 15 hard failures, 5 short writes, 2 collisions, release retry and normal bytes PASS\n4/4 Test #12: finalize_faults ..................   Passed    0.17 sec\n\nThe following tests passed:\n\trecord_session\n\tstorage_short_write\n\tspace_admission\n\tfinalize_faults\n\n100% tests passed, 0 tests failed out of 4\n\nTotal Test time (real) =   0.29 sec\n",
+    "queue_full_injection": {
+      "status": "NOT RUN",
+      "reason": "Default record_session injects a latched MC100_IO policy fault; no actual V1 96-frame queue saturation. Legacy queue_full is future-profile only."
+    },
+    "no_frame_close": {
+      "status": "PASS",
+      "scope": "portable session policy rejects clean close with no frames"
+    }
+  },
+  "device": {
+    "port": "COM7",
+    "chip": "ESP32-S3 QFN56 revision v0.2",
+    "flash_bytes": 8388608,
+    "usb_mode": "USB-Serial/JTAG",
+    "flash_manufacturer": "20",
+    "flash_device": "4017",
+    "identity_log": {
+      "path": ".superpowers/sdd/2026-09-25-mc100-minimal-recorder/task-6-flash-id.log",
+      "bytes": 629,
+      "sha256": "4be6bf1c77cb6e73c2697e0cbb6dcf06fc85062609f9ffe2caa7cddade0df6f0"
+    }
+  },
+  "flash": {
+    "status": "PASS",
+    "verified_regions": [
+      "bootloader",
+      "partition-table",
+      "app"
+    ],
+    "log": {
+      "path": ".superpowers/sdd/2026-09-25-mc100-minimal-recorder/task-6-flash.log",
+      "bytes": 2813,
+      "sha256": "1ea76fe2bb768c7457f6eac2a6630a57dde790d0e12d9c39b35d59cedf2b16f7"
+    },
+    "backup": {
+      "path": ".superpowers/sdd/2026-09-25-mc100-minimal-recorder/pre-minimal-recorder-com7-8mb.bin",
+      "bytes": 8388608,
+      "sha256": "6c428112f1fd3ba858acbeeb3264ff0c323bcbe70921938c1691e4a07aedbe37"
+    },
+    "after_flash": "no-reset; one SDK HardReset after capture opened COM7"
+  },
+  "serial": {
+    "status": "PASS",
+    "duration_seconds": 660.139,
+    "log": {
+      "path": "evidence/2026-09-25-mc100-minimal-recorder/serial-com7.log",
+      "bytes": 5458,
+      "sha256": "17f4d2a0cb939152e3e9cb2472594729c44cafdfb6a08195e79001dd35870dfb"
+    },
+    "stop": {
+      "enqueued": 30000,
+      "consumed": 30000,
+      "written": 30000,
+      "discarded": 0,
+      "queue_peak": 17,
+      "overflow": 0,
+      "fault": 0,
+      "reason": 0,
+      "publications": 2,
+      "quiesced": 1,
+      "mounted": 1,
+      "capture_stack_free": 5048,
+      "storage_stack_free": 7320,
+      "heap": 260692,
+      "reset_required": 0
+    },
+    "publications": [
+      {
+        "observed_at_seconds": 301.11,
+        "generation": 1,
+        "segment": 0,
+        "wav_name": "adb119cfac90c3e5ac8ac4fd906f7104_1_0.wav"
+      },
+      {
+        "observed_at_seconds": 600.97,
+        "generation": 1,
+        "segment": 1,
+        "wav_name": "adb119cfac90c3e5ac8ac4fd906f7104_1_1.wav"
+      }
+    ],
+    "queue_capacity_frames": 96,
+    "queue_bytes": 62208,
+    "runtime_bytes": 62432,
+    "capture_stack_bytes": 8192,
+    "storage_stack_bytes": 16384,
+    "prepare_elapsed_ms": 469,
+    "recording_command_sent": false,
+    "reported_clean_close": true
+  },
+  "card": {
+    "filesystem_observed": "exFAT",
+    "total_bytes_observed": 63831015424,
+    "free_bytes_before_prepare": 63798640640,
+    "manufacturer_model": "NOT RECONFIRMED; historical 2026-09-19 report says user-confirmed SanDisk 64 GB",
+    "cid": null,
+    "physical_power_down": "NOT RUN",
+    "reader": "E: removable, no media, size 0",
+    "reader_inventory": [
+      {
+        "DriveLetter": "D",
+        "FileSystemLabel": "新加卷",
+        "FileSystem": "NTFS",
+        "DriveType": "Fixed",
+        "Size": 1000186310656,
+        "SizeRemaining": 864052928512
+      },
+      {
+        "DriveLetter": null,
+        "FileSystemLabel": "",
+        "FileSystem": "NTFS",
+        "DriveType": "Fixed",
+        "Size": 1048571904,
+        "SizeRemaining": 120840192
+      },
+      {
+        "DriveLetter": "E",
+        "FileSystemLabel": "",
+        "FileSystem": "",
+        "DriveType": "Removable",
+        "Size": 0,
+        "SizeRemaining": 0
+      },
+      {
+        "DriveLetter": "C",
+        "FileSystemLabel": "",
+        "FileSystem": "NTFS",
+        "DriveType": "Fixed",
+        "Size": 1022930972672,
+        "SizeRemaining": 597768990720
+      }
+    ]
+  },
+  "recording_verifier": {
+    "status": "NOT RUN",
+    "valid": null,
+    "complete": null,
+    "segments": [],
+    "reason": "Board/card physically unavailable for power-down and transfer to PC reader. No WAV/IDX copied; verify_recording.py not invoked on hardware output.",
+    "expected_pcm_bytes_per_segment": 9600000,
+    "expected_combined_seconds": 600,
+    "reserve_part_pair": "NOT OBSERVED; no directory readback"
+  },
+  "remaining_gates": [
+    "Power down, move SD to PC reader and validate both clean WAV/IDX pairs",
+    "Actual V1 queue-full fault injection",
+    "Physical missing/unmountable-card bounded failure"
+  ],
+  "deviations": [
+    "EVT uses separate out/target-evt directory to preserve the final product image",
+    "Preflash EVT sync status request timed out; ROM identity/backup/flash succeeded",
+    "Initial esp_idf_size --format json was rejected; supported --format json2 succeeded",
+    "Independent static analyzer and sanitizers NOT RUN; compiler/build/configuration checks passed"
+  ]
+}

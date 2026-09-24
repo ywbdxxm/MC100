@@ -1,0 +1,84 @@
+[00000.000] HOST_CAPTURE_START utc=2026-09-24T21:14:03.509248+00:00 port=COM7 baud=115200 duration_seconds=660
+[00000.000] HOST_RESET once=1 method=esptool.reset.HardReset uses_usb=1
+[00000.402] ESP-ROM:esp32s3-20210327
+[00000.402] Build:Mar 27 2021
+[00000.402] rst:0x15 (USB_UART_CHIP_RESET),boot:0x8 (SPI_FAST_FLASH_BOOT)
+[00000.402] Saved PC:0x40378142
+[00000.402] SPIWP:0xee
+[00000.402] mode:DIO, clock div:1
+[00000.402] load:0x3fce2820,len:0x1548
+[00000.402] load:0x403c8700,len:0xdac
+[00000.402] load:0x403cb700,len:0x2f60
+[00000.402] entry 0x403c8900
+[00000.402] I (24) boot: ESP-IDF v6.1 2nd stage bootloader
+[00000.402] I (24) boot: compile time Sep 25 2026 05:10:56
+[00000.402] I (25) boot: Multicore bootloader
+[00000.402] I (25) boot: chip revision: v0.2
+[00000.402] I (25) boot: efuse block revision: v1.4
+[00000.402] I (25) boot.esp32s3: Boot SPI Speed : 80MHz
+[00000.402] I (25) boot.esp32s3: SPI Mode       : DIO
+[00000.402] I (25) boot.esp32s3: SPI Flash Size : 8MB
+[00000.402] I (26) boot: Enabling RNG early entropy source...
+[00000.402] I (26) boot: Partition Table:
+[00000.402] I (26) boot: ## Label            Usage          Type ST Offset   Length
+[00000.403] I (26) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+[00000.403] I (27) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+[00000.403] I (27) boot:  2 factory          factory app      00 00 00010000 00300000
+[00000.403] I (28) boot: End of partition table
+[00000.403] I (28) esp_image: segment 0: paddr=00010020 vaddr=3c030020 size=0ed34h ( 60724) map
+[00000.403] I (39) esp_image: segment 1: paddr=0001ed5c vaddr=3fc91100 size=012bch (  4796) load
+[00000.403] I (41) esp_image: segment 2: paddr=00020020 vaddr=42000020 size=2b9a0h (178592) map
+[00000.403] I (74) esp_image: segment 3: paddr=0004b9c8 vaddr=3fc923bc size=01f1ch (  7964) load
+[00000.403] I (76) esp_image: segment 4: paddr=0004d8ec vaddr=40374000 size=0d034h ( 53300) load
+[00000.403] I (88) esp_image: segment 5: paddr=0005a928 vaddr=50000000 size=00024h (    36) load
+[00000.403] I (94) boot: Loaded app from partition at offset 0x10000
+[00000.403] I (95) boot: Disabling RNG early entropy source...
+[00000.403] I (96) cpu_start: Multicore app
+[00000.403] I (105) cpu_start: Pro cpu start user code
+[00000.403] I (105) cpu_start: cpu freq: 80000000 Hz
+[00000.403] I (105) app_init: Application information:
+[00000.403] I (105) app_init: Project name:     mc100
+[00000.403] I (106) app_init: App version:      t06-recovery-blocked-20260919-4
+[00000.403] I (106) app_init: Compile time:     Sep 25 2026 05:10:44
+[00000.403] I (106) app_init: ELF file SHA256:  78f1f4c9c...
+[00000.403] I (106) app_init: ESP-IDF:          v6.1
+[00000.403] I (107) efuse_init: Min chip rev:     v0.0
+[00000.403] I (107) efuse_init: Max chip rev:     v0.99 
+[00000.403] I (107) efuse_init: Chip rev:         v0.2
+[00000.403] I (107) heap_init: Initializing. RAM available for dynamic allocation:
+[00000.403] I (108) heap_init: At 3FCA5570 len 000441A0 (272 KiB): RAM
+[00000.403] I (108) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM
+[00000.403] I (108) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM
+[00000.403] I (109) heap_init: At 600FE000 len 00001FE8 (7 KiB): RTCRAM
+[00000.403] I (110) spi_flash: detected chip: generic
+[00000.403] I (111) spi_flash: flash io: dio
+[00000.403] I (112) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+[00000.403] I (112) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+[00000.403] I (114) main_task: Started on CPU0
+[00000.403] I (114) main_task: Calling app_main()
+[00000.403] RECORDER_BOOT target_frames=30000 queue_frames=96 queue_bytes=62208 runtime_bytes=62432 capture_stack_bytes=8192 storage_stack_bytes=16384
+[00000.403] RECORDER_BOARD result=0
+[00000.403] I (114) SD_HOST: src_freq_hz: 160000000
+[00000.403] I (114) main_task: Returned from app_main()
+[00000.403] W (174) SD_HOST: input line delay not supported, fallback to 0 delay
+[00000.403] SD_MOUNT filesystem=exFAT total=63831015424 free=63798640640 readonly_probe=1
+[00000.403] RECORDER_MOUNT attempt=1 result=0
+[00000.818] RECORDER_PREPARE result=0 elapsed_ms=469
+[00000.819] RECORDER state=RECORDING
+[00060.167] HOST_CAPTURE_PROGRESS elapsed_seconds=60.167
+[00120.064] HOST_CAPTURE_PROGRESS elapsed_seconds=120.064
+[00180.135] HOST_CAPTURE_PROGRESS elapsed_seconds=180.135
+[00240.070] HOST_CAPTURE_PROGRESS elapsed_seconds=240.070
+[00300.174] HOST_CAPTURE_PROGRESS elapsed_seconds=300.174
+[00301.110] RECORDER_PUBLICATION generation=1 segment=0 path=adb119cfac90c3e5ac8ac4fd906f7104_1_0.wav
+[00360.060] HOST_CAPTURE_PROGRESS elapsed_seconds=360.060
+[00420.032] HOST_CAPTURE_PROGRESS elapsed_seconds=420.032
+[00480.169] HOST_CAPTURE_PROGRESS elapsed_seconds=480.169
+[00540.196] HOST_CAPTURE_PROGRESS elapsed_seconds=540.196
+[00600.019] HOST_CAPTURE_PROGRESS elapsed_seconds=600.019
+[00600.970] RECORDER_CLOSE result=0 clean=1 last_seq=29999
+[00600.970] RECORDER_PUBLICATION generation=1 segment=1 path=adb119cfac90c3e5ac8ac4fd906f7104_1_1.wav
+[00600.972] RECORDER_STOP enqueued=30000 consumed=30000 written=30000 discarded=0 queue_peak=17 overflow=0 fault=0 reason=0 publications=2 quiesced=1 mounted=1 capture_stack_free=5048 storage_stack_free=7320 heap=260692 reset_required=0
+[00600.972] RECORDER state=IDLE
+[00660.139] HOST_CAPTURE_PROGRESS elapsed_seconds=660.139
+[00660.139] HOST_CAPTURE_END utc=2026-09-24T21:25:03.647505+00:00 resets=1

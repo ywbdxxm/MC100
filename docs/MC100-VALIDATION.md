@@ -10,8 +10,10 @@
 | PDM 采集 | EVT PASS @80 MHz | 约 10 秒、501 帧、0 timeout/error |
 | WAV/索引/CRC | HOST PASS | 格式边界、损坏拒绝、CRC 和 Python WAV 互操作已测 |
 | SD 录音写入 | EVT PASS（单卡） | 64 GB exFAT，3 秒及约 305 秒记录读回通过 |
-| Host 默认 V1 套件 | PASS (16/16) | MSVC Host profile；future-runtime 测试另行选择，不代表实板 |
-| 产品 boot → 600 s record → idle | NOT RUN | v6.1 product 构建已通过；COM7 产品闭环尚未运行。正常运行预期两个 clean WAV/IDX 对，可能保留 reserve `.wav.part/.idx.part` 对 |
+| Host 默认 V1 套件 | PASS (16/16) | 本轮 MSVC 干净构建与独立 CTest 均 16/16；可控存储故障/会话策略 focused 4/4；不代表实板 |
+| product / EVT 目标构建 | PASS | 锁定 v6.1 两种图均通过；product app 305,520 byte，默认图无 Supervisor/VAD/旧 runtime |
+| 产品 boot → 600 s record → idle | SERIAL PASS；文件验收 NOT RUN | COM7 660.139 s 观察：30,000 帧写入、2 次 publication、clean close、IDLE；queue 峰值 17/96，discard/overflow/fault 均 0。PC 读卡器无介质，WAV/IDX CRC/FINAL 尚未校验 |
+| V1 队列塞满故障注入 | NOT RUN | 默认 Host 覆盖锁存故障后禁止 clean close，尚未实际驱动 V1 96 项队列塞满及生产者停止 |
 | VAD 选型 | OPEN | libfvad 有 80 MHz 工程探针；esp-sr 当前 runtime 内存失败 |
 | 40 MHz PDM | BLOCKED | 固定 40 MHz 在 PDM 启动阶段触发 Task WDT；DFS 活跃为 80 MHz |
 | 真断电恢复 | DEFERRED | 不在当前 V1 产品验收范围；恢复核心仅有 Host 测试 |
@@ -22,6 +24,7 @@
 ## 2. 已有证据
 
 - [2026-09-19 EVT 录音报告](reports/2026-09-19-evt-recording.md)
+- [2026-09-25 最小录音产品验证](reports/2026-09-25-mc100-minimal-recorder.md)
 - [2026-09-19 exFAT 决策记录](reports/2026-09-19-exfat-decision.md)
 - [2026-09-23 PM/VAD 实验](software/2026-09-23-mc100-pm40-vad-spike.md)
 - [原理图复核](hardware/MC100-SCHEMATIC-REVIEW.md)
@@ -32,8 +35,8 @@
 ### P0：整理和最小录音闭环
 
 - 只保留一个项目入口、一个硬件摘要、一个软件摘要和一个状态页。
-- 在 COM7 验证产品固件最小录音闭环。
-- 记录实际文件、卡型号、串口日志和失败原因。
+- COM7 自动录音至 IDLE 已观察通过；断电后通过 PC 读卡器校验本次两对 WAV/IDX。
+- 补齐本次卡型号/CID、文件 CRC/FINAL，以及 V1 队列塞满故障注入。
 
 ### P1：存储可靠性
 
@@ -62,7 +65,7 @@
 - Host 测试通过只说明可移植逻辑通过。
 - Target 构建通过只说明固件可构建。
 - EVT 台架录音通过只说明台架路径在指定卡上工作。
-- 产品 boot → 600 s → idle 只有在 COM7 实板日志和读卡器校验完成后才能提升状态；当前保持 `NOT RUN`。
+- 产品完整验收需要 COM7 实板日志和读卡器校验共同完成；当前仅 `SERIAL PASS`，文件校验保持 `NOT RUN`，不能写作完整产品 PASS。
 - 声学、电池、真断电和长期耐久必须有独立实板记录。
 - 不把估算、电流预算或文档中的目标写成实测 PASS。
 
