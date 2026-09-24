@@ -98,10 +98,24 @@ target_include_directories(mc100_audio PUBLIC
     ../components/mc100_core/include
 )
 mc100_host_checks(mc100_audio)
+add_library(mc100_recorder STATIC
+    ../components/mc100_recorder/record_session.c)
+target_include_directories(mc100_recorder PUBLIC
+    ../components/mc100_recorder/include
+    ../components/mc100_core/include)
+mc100_host_checks(mc100_recorder)
+add_executable(test_record_session ../tests/test_record_session.c)
+target_link_libraries(test_record_session PRIVATE mc100_recorder)
+mc100_host_checks(test_record_session)
+add_test(NAME record_session COMMAND test_record_session)
 add_executable(test_frame_assembler ../tests/test_frame_assembler.c)
 target_link_libraries(test_frame_assembler PRIVATE mc100_audio)
 mc100_host_checks(test_frame_assembler)
 add_test(NAME frame_assembler COMMAND test_frame_assembler)
+add_executable(test_record_assembler_gap ../tests/test_record_assembler_gap.c)
+target_link_libraries(test_record_assembler_gap PRIVATE mc100_audio)
+mc100_host_checks(test_record_assembler_gap)
+add_test(NAME record_assembler_gap COMMAND test_record_assembler_gap)
 if(MC100_ENABLE_FUTURE_RUNTIME_TESTS)
 foreach(name preroll_handoff queue_full capture_gap)
     add_executable(test_${name} ../tests/test_${name}.c)
