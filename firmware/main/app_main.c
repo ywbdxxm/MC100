@@ -1,5 +1,5 @@
 /* The build-time selector keeps the verified EVT bench entry point available
- * while allowing the product supervisor/runtime to own the default image. */
+ * while allowing the minimal recorder to own the default image. */
 #include <stdio.h>
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
@@ -7,13 +7,12 @@
 
 #if defined(CONFIG_MC100_APP_PRODUCT)
 
-/* Implemented by mc100_platform_espidf/product_runtime.c (Task 2.8). */
-extern void mc100_product_run(void);
+#include "record_loop.h"
 
-static void mc100_product_task(void *argument)
+static void mc100_record_task(void *argument)
 {
     (void)argument;
-    mc100_product_run();
+    mc100_record_run();
     vTaskDelete(NULL);
 }
 
@@ -33,9 +32,10 @@ static void evt_task(void *argument)
 void app_main(void)
 {
 #if defined(CONFIG_MC100_APP_PRODUCT)
-    if (xTaskCreatePinnedToCore(mc100_product_task, "mc100_product", 16384,
+    if (xTaskCreatePinnedToCore(mc100_record_task, "mc100_recorder",
+                                MC100_RECORD_STORAGE_STACK_BYTES,
                                 NULL, 8, NULL, 0) != pdPASS) {
-        puts("MC100 product startup failed: no product task");
+        puts("MC100 recorder startup failed: no storage task");
         fflush(stdout);
     }
 #else
