@@ -12,7 +12,7 @@
 | SD 录音写入 | EVT PASS（单卡） | 64 GB exFAT，3 秒及约 305 秒记录读回通过 |
 | Host 默认 V1 套件 | PASS (17/17) | PCM 处理器加入后，MSVC 干净构建与独立 CTest 为 17/17；可控存储故障/会话策略 focused 4/4；不代表实板 |
 | product / EVT 目标构建 | product PASS；EVT 未重建 | 锁定 v6.1 的当前 product 图已通过，`mc100.bin` 与 bootloader 已生成并通过分区大小检查；EVT 本轮未重建 |
-| 产品 boot → configured record → idle | 旧 600 s 串口 PASS；当前可调音频版本待实板 | 旧版本 COM7 660.139 s 观察：30,000 帧写入、2 次 publication、clean close、IDLE；queue 峰值 17/96，discard/overflow/fault 均 0。当前版本默认 20 s、DC blocking 开启、8 倍增益，需重新刷写并用读卡器校验 WAV/IDX；输入/输出峰值和削波计数也待记录 |
+| 产品 boot → configured record → idle | 旧 600 s 串口 PASS；当前版本 BLOCKED | 当前 product 镜像已写入 COM7 且三段 Hash 校验通过，但复位后停在 ROM `DOWNLOAD (boot:0x0)`，未取得 `RECORDER_BOOT/STOP/IDLE`；疑似 GPIO0/BOOT 或复位时序，需释放 BOOT 后重试。SD 未操作，WAV/IDX、峰值和削波计数仍待记录 |
 | 产品 PCM 处理器 | HOST PASS；声学 NOT RUN | DC blocking、增益、饱和、跨帧连续性、非法参数和小信号算术均已由 `test_pcm_filter` 覆盖。Host 结果不能证明麦克风灵敏度、声孔、PDM 电气裕量或播放听感 |
 | V1 队列塞满故障注入 | 实板 NOT RUN；HOST PASS | 默认 Host 用 96 项 `mc100_frame_t` 队列模型验证第 97 帧拒绝、首个 `MC100_FULL` 锁存及 quiescence 前后禁止 clean close；只覆盖可移植会话策略，真实 FreeRTOS/I2S 调度及生产者停止仍未注入验证 |
 | VAD 选型 | OPEN | libfvad 有 80 MHz 工程探针；esp-sr 当前 runtime 内存失败 |

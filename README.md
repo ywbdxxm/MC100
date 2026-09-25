@@ -55,7 +55,7 @@ pwsh -File firmware/tools/build.ps1 -Profile product -Clean
 
 - EVT 台架固件已经在 COM7、USB 供电、64 GB exFAT 卡上完成 PDM 采集、WAV/索引写入、轮换和 CRC 读回。
 - Host 默认测试覆盖 V1 录音策略、帧组装、PCM 处理器、WAV、存储和 CRC；supervisor 等旧运行时测试仅在 future profile 中保留。
-- 旧产品 profile 已在 COM7 完成 boot → PDM → writer → 600 秒 → IDLE 串口 smoke。当前版本默认 20 秒并增加可配置 DC blocking/数字增益；锁定 ESP-IDF v6.1 的 product 目标构建已通过，COM7 录音和 SD 文件 CRC/FINAL 读回仍需完成。
+- 旧产品 profile 已在 COM7 完成 boot → PDM → writer → 600 秒 → IDLE 串口 smoke。当前版本默认 20 秒并增加可配置 DC blocking/数字增益；锁定 ESP-IDF v6.1 的 product 目标构建和 COM7 三段镜像 Hash 校验已通过，但板子复位后停在 ROM `DOWNLOAD (boot:0x0)`，因此录音和 SD 文件 CRC/FINAL 读回仍需完成。
 - 40 MHz PDM 启动实验失败；DFS 下 PDM 活跃时实际为 80 MHz。
 - esp-sr VADNet1 medium 在无 PSRAM 板上的当前 runtime 初始化因内存耗尽失败；VAD 尚未定型。
 - 真实声学、电池电流、长期耐久、真断电和多卡验证尚未放行。
