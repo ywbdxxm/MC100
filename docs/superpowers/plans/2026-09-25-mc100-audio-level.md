@@ -48,8 +48,8 @@
 **Interfaces:**
 - Produces: `mc100_pcm_filter_t` holding Q16 DC estimate, input/output peak, and clipped-sample count; `mc100_pcm_filter_init(mc100_pcm_filter_t *)`; `mc100_pcm_filter_process(mc100_pcm_filter_t *, int16_t *, size_t, uint32_t gain, bool dc_block)` returning `mc100_result_t`.
 
-- [ ] Add a failing host test for identity (`dc_block=false`, gain 1), constant nonzero offset removal, gain, positive/negative saturation, invalid arguments, and chunked versus whole-buffer continuity.
-- [ ] Add the filter source to both CMake graphs, run the focused test to confirm it fails, then implement the smallest fixed-point filter using `sample_q16 = (int64_t)sample * 65536`, `dc_q16 += (sample_q16 - dc_q16) / 512`, gain, and signed 16-bit clamp. Validate arguments before mutating samples.
+- [ ] Add a failing host test for identity (`dc_block=false`, gain 1), constant nonzero offset removal, an offset step `[0,1000]` that yields 998 at 1x, a low-level step `[0,1]` that yields 7 at 8x, gain, saturation boundaries, invalid arguments, and chunked versus whole-buffer continuity.
+- [ ] Add the filter source to both CMake graphs, run the focused test to confirm it fails, then implement the fixed-point filter using `sample_q16 = (int64_t)sample * 65536`, `dc_q16 += (sample_q16 - dc_q16) / 512`, and `(sample_q16 - dc_q16) * gain / 65536` before signed 16-bit clamp. Use 64-bit intermediates; validate arguments before mutating samples. Count clipping before clamp and record input peak before processing and output peak after clamp.
 - [ ] Run the focused test and full default host suite; inspect C11 warnings and commit the portable audio processor.
 
 ### Task 3: Product Integration and User Instructions
