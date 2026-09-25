@@ -5,7 +5,7 @@
 | Profile | 入口 | 用途 | 实板状态 |
 | --- | --- | --- | --- |
 | `evt` | `main/evt_capture.c` | USB 命令控制的采集和 SD 录音台架 | COM7 单卡通过 |
-| `product` | `main/app_main.c` → `record_loop.c` → PDM/有界队列/writer | 上电自动录音 600 秒，生成两个约 5 分钟 WAV/IDX 段后进入 IDLE | v6.1 构建通过；COM7 全流程 NOT RUN |
+| `product` | `main/app_main.c` → `record_loop.c` → PDM/有界队列/writer | 上电自动录音 600 秒，生成两个约 5 分钟 WAV/IDX 段后进入 IDLE | v6.1 构建通过；COM7 串口 PASS；SD 文件读回 NOT RUN |
 
 无线组件在当前目标构建中排除。软件现状、硬件约束和验证记录分别见[软件说明](../docs/MC100-SOFTWARE.md)、[硬件说明](../docs/MC100-HARDWARE.md)和[验证与状态](../docs/MC100-VALIDATION.md)。
 
@@ -18,7 +18,7 @@ pwsh -File firmware/tools/test-host.ps1 -Clean
 pwsh -File firmware/tools/test-host.ps1 -Clean -FutureRuntimeTests
 ```
 
-第一个命令是 V1 默认套件；第二个命令只运行保留的 future-runtime 测试。Host 测试验证可移植逻辑，不能代替板上 PDM、SD、电池或掉电测试。
+第一个命令是 V1 默认套件；第二个命令在 V1 套件上增加保留的 future-runtime 测试。Host 测试验证可移植逻辑，不能代替板上 PDM、SD、电池或掉电测试。
 
 ## Target 构建
 

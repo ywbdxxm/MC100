@@ -29,7 +29,7 @@ MC100 是一块基于 ESP32-S3-MINI-1-N8 的便携录音板：PDM 麦克风采�
 
 - EVT 台架固件已经在 COM7、USB 供电、64 GB exFAT 卡上完成 PDM 采集、WAV/索引写入、轮换和 CRC 读回。
 - Host 默认测试覆盖 V1 录音策略、帧组装、WAV、存储和 CRC；supervisor 等旧运行时测试仅在 future profile 中保留。
-- 产品 profile 已切换为 boot → PDM → writer → 600 秒 → IDLE；已通过锁定 ESP-IDF v6.1 构建，但尚未在 COM7 完成产品循环 smoke。
+- 产品 profile 已切换为 boot → PDM → writer → 600 秒 → IDLE；锁定 ESP-IDF v6.1 构建通过，COM7 串口实测自动录音 600 秒并进入 IDLE。SD 文件 CRC/FINAL 读回尚未运行。
 - 40 MHz PDM 启动实验失败；DFS 下 PDM 活跃时实际为 80 MHz。
 - esp-sr VADNet1 medium 在无 PSRAM 板上的当前 runtime 初始化因内存耗尽失败；VAD 尚未定型。
 - 真实声学、电池电流、长期耐久、真断电和多卡验证尚未放行。

@@ -17,7 +17,7 @@ COM7 串口观察与 PC 读卡器文件校验是两个独立门禁。本记录�
 | COM7 写入与哈希校验 | PASS | bootloader、partition-table、app 三个区域校验成功 |
 | product 自动录音至 IDLE | SERIAL PASS | 660.139 s 观察，30,000 帧、2 次 publication、clean close、IDLE，无重启或第三次 publication |
 | 两对 WAV/IDX 的 CRC、FINAL 和时长 | NOT RUN | PC 读卡器 E: 无介质；未取得本次文件 |
-| V1 96 帧队列实际塞满故障注入 | NOT RUN | 默认测试只验证已锁存故障后的策略；未驱动真实 V1 队列塞满 |
+| V1 96 帧队列塞满策略 | HOST PASS；实板 NOT RUN | 默认 Host `record_session` 用 96 项固定容量队列模型验证第 97 帧返回 `MC100_FULL`、首个故障保持锁存、生产者 quiescence 前不丢弃队列且始终禁止 clean-close；真实 FreeRTOS/I2S 调度及生产者停止仍未注入验证 |
 | 实板缺卡/挂载失败的有界退出 | NOT RUN | 本轮使用已插卡，未操作卡或切电 |
 | VAD、无线、自动电池策略、真断电恢复 | DEFERRED | 不属于 V1 本轮验收 |
 | 声学与耐久 | NOT RUN | 未开展相应物理测试 |
@@ -43,9 +43,10 @@ recording_verifier。
 `finalize_faults` 输出为 `15 hard failures, 5 short writes, 2 collisions, release retry
 and normal bytes PASS`。`storage_short_write` 包含短写和空间不足的 INCIDENT 路径；
 `record_session` 包含 30,000 帧上限、610 s deadline、producer quiescence、consumer
-drain 及无帧不 clean-close 的策略断言。它的 queue fault 用例直接锁存 `MC100_IO`，
-没有实际填满 V1 的 96 项 FreeRTOS 队列；future profile 的 `queue_full` 测试属于旧
-audio queue，不能替代这个门禁。本轮未运行独立静态分析器或 sanitizer。
+drain、无帧不 clean-close，以及 V1 96 项固定容量队列模型的塞满策略断言。模型不执行
+`record_loop.c`、FreeRTOS 调度或 I2S，因此不能替代真实目标上的队列饱和与生产者停止注入。
+future profile 的 `queue_full` 测试属于旧 audio queue，也不能替代目标注入门禁。本轮未运行
+独立静态分析器或 sanitizer。
 
 ## Target 身份、构建和内存
 

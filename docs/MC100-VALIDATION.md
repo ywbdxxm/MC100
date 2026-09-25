@@ -13,7 +13,7 @@
 | Host 默认 V1 套件 | PASS (16/16) | 本轮 MSVC 干净构建与独立 CTest 均 16/16；可控存储故障/会话策略 focused 4/4；不代表实板 |
 | product / EVT 目标构建 | PASS | 锁定 v6.1 两种图均通过；product app 305,520 byte，默认图无 Supervisor/VAD/旧 runtime |
 | 产品 boot → 600 s record → idle | SERIAL PASS；文件验收 NOT RUN | COM7 660.139 s 观察：30,000 帧写入、2 次 publication、clean close、IDLE；queue 峰值 17/96，discard/overflow/fault 均 0。PC 读卡器无介质，WAV/IDX CRC/FINAL 尚未校验 |
-| V1 队列塞满故障注入 | NOT RUN | 默认 Host 覆盖锁存故障后禁止 clean close，尚未实际驱动 V1 96 项队列塞满及生产者停止 |
+| V1 队列塞满故障注入 | 实板 NOT RUN；HOST PASS | 默认 Host 用 96 项 `mc100_frame_t` 队列模型验证第 97 帧拒绝、首个 `MC100_FULL` 锁存及 quiescence 前后禁止 clean close；只覆盖可移植会话策略，真实 FreeRTOS/I2S 调度及生产者停止仍未注入验证 |
 | VAD 选型 | OPEN | libfvad 有 80 MHz 工程探针；esp-sr 当前 runtime 内存失败 |
 | 40 MHz PDM | BLOCKED | 固定 40 MHz 在 PDM 启动阶段触发 Task WDT；DFS 活跃为 80 MHz |
 | 真断电恢复 | DEFERRED | 不在当前 V1 产品验收范围；恢复核心仅有 Host 测试 |
@@ -36,7 +36,7 @@
 
 - 只保留一个项目入口、一个硬件摘要、一个软件摘要和一个状态页。
 - COM7 自动录音至 IDLE 已观察通过；断电后通过 PC 读卡器校验本次两对 WAV/IDX。
-- 补齐本次卡型号/CID、文件 CRC/FINAL，以及 V1 队列塞满故障注入。
+- 补齐本次卡型号/CID、文件 CRC/FINAL，以及真实 FreeRTOS/I2S 队列饱和与生产者停止注入；Host 队列模型已覆盖策略边界。
 
 ### P1：存储可靠性
 
@@ -78,4 +78,4 @@ pwsh -File firmware/tools/build.ps1 -Profile product -Clean
 pwsh -File firmware/tools/build.ps1 -Profile evt -Clean
 ```
 
-默认 Host 套件是 V1 录音路径；`-FutureRuntimeTests` 仅验证保留的旧运行时。上述构建结果不替代 COM7 和 SD 卡物理证据。
+默认 Host 套件是 V1 录音路径；`-FutureRuntimeTests` 会在 V1 测试上增加保留的旧运行时测试。上述构建结果不替代 COM7 和 SD 卡物理证据。
