@@ -10,9 +10,10 @@
 | PDM 采集 | EVT PASS @80 MHz | 约 10 秒、501 帧、0 timeout/error |
 | WAV/索引/CRC | HOST PASS | 格式边界、损坏拒绝、CRC 和 Python WAV 互操作已测 |
 | SD 录音写入 | EVT PASS（单卡） | 64 GB exFAT，3 秒及约 305 秒记录读回通过 |
-| Host 默认 V1 套件 | PASS (16/16) | 本轮 MSVC 干净构建与独立 CTest 均 16/16；可控存储故障/会话策略 focused 4/4；不代表实板 |
-| product / EVT 目标构建 | PASS | 锁定 v6.1 两种图均通过；product app 305,520 byte，默认图无 Supervisor/VAD/旧 runtime |
-| 产品 boot → 600 s record → idle | SERIAL PASS；文件验收 NOT RUN | COM7 660.139 s 观察：30,000 帧写入、2 次 publication、clean close、IDLE；queue 峰值 17/96，discard/overflow/fault 均 0。PC 读卡器无介质，WAV/IDX CRC/FINAL 尚未校验 |
+| Host 默认 V1 套件 | PASS (17/17) | PCM 处理器加入后，MSVC 干净构建与独立 CTest 为 17/17；可控存储故障/会话策略 focused 4/4；不代表实板 |
+| product / EVT 目标构建 | 旧版本 PASS；当前版本待重建 | 锁定 v6.1 的旧两种图均通过；当前 product 已加入 PCM 处理和可调设置，需重跑目标构建并记录新产物 |
+| 产品 boot → configured record → idle | 旧 600 s 串口 PASS；当前可调音频版本待实板 | 旧版本 COM7 660.139 s 观察：30,000 帧写入、2 次 publication、clean close、IDLE；queue 峰值 17/96，discard/overflow/fault 均 0。当前版本默认 20 s、DC blocking 开启、8 倍增益，需重新刷写并用读卡器校验 WAV/IDX；输入/输出峰值和削波计数也待记录 |
+| 产品 PCM 处理器 | HOST PASS；声学 NOT RUN | DC blocking、增益、饱和、跨帧连续性、非法参数和小信号算术均已由 `test_pcm_filter` 覆盖。Host 结果不能证明麦克风灵敏度、声孔、PDM 电气裕量或播放听感 |
 | V1 队列塞满故障注入 | 实板 NOT RUN；HOST PASS | 默认 Host 用 96 项 `mc100_frame_t` 队列模型验证第 97 帧拒绝、首个 `MC100_FULL` 锁存及 quiescence 前后禁止 clean close；只覆盖可移植会话策略，真实 FreeRTOS/I2S 调度及生产者停止仍未注入验证 |
 | VAD 选型 | OPEN | libfvad 有 80 MHz 工程探针；esp-sr 当前 runtime 内存失败 |
 | 40 MHz PDM | BLOCKED | 固定 40 MHz 在 PDM 启动阶段触发 Task WDT；DFS 活跃为 80 MHz |
@@ -36,6 +37,7 @@
 
 - 只保留一个项目入口、一个硬件摘要、一个软件摘要和一个状态页。
 - COM7 自动录音至 IDLE 已观察通过；断电后通过 PC 读卡器校验本次两对 WAV/IDX。
+- 重新验证产品 PCM 处理版本：先用默认 20 秒/8 倍配置，再按需要调整 `MC100_RECORD_DURATION_SECONDS`、`MC100_RECORD_GAIN_X` 和 `MC100_RECORD_DC_BLOCK_ENABLE`。记录 `RECORDER_BOOT` 配置、`RECORDER_STOP` 峰值/削波计数，并用固定声源、距离和方向对比未处理基线。
 - 补齐本次卡型号/CID、文件 CRC/FINAL，以及真实 FreeRTOS/I2S 队列饱和与生产者停止注入；Host 队列模型已覆盖策略边界。
 
 ### P1：存储可靠性
@@ -69,7 +71,13 @@
 - 声学、电池、真断电和长期耐久必须有独立实板记录。
 - 不把估算、电流预算或文档中的目标写成实测 PASS。
 
-## 5. 可复现命令
+## 5. 音量实验边界
+
+`MC100_RECORD_GAIN_X` 是产品路径上的整数数字增益，8 倍约为 +18 dB；它会同时放大噪声，输出削波由 `RECORDER_STOP` 的 clip 计数暴露。`MC100_RECORD_DC_BLOCK_ENABLE` 只去除慢变化直流估计，不会提升真实交流声压或麦克风灵敏度。WAV/IDX CRC、峰值变化和主观试听只能说明当前录音链路的处理结果，不能单独判定硬件声学合格。
+
+放行声学结论前，必须在同一声源、距离、声孔方向和播放增益下比较原始路径与处理路径；若仍过低或噪声明显，应测量麦克风 VDD、PDM 时钟/数据和实际声孔路径，再决定是否修改硬件或 PDM 配置。
+
+## 6. 可复现命令
 
 ```powershell
 pwsh -File firmware/tools/test-host.ps1 -Clean
