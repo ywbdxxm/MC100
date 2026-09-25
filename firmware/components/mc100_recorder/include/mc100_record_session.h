@@ -3,14 +3,14 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "mc100_record_settings.h"
 #include "mc100_types.h"
 
 enum {
-    MC100_RECORD_DURATION_SECONDS = 600,
     MC100_RECORD_FRAME_MS = 20,
     MC100_RECORD_TARGET_FRAMES =
         MC100_RECORD_DURATION_SECONDS * 1000 / MC100_RECORD_FRAME_MS,
-    MC100_RECORD_DEADLINE_SECONDS = 610
+    MC100_RECORD_DEADLINE_SECONDS = MC100_RECORD_DURATION_SECONDS + 10
 };
 
 typedef struct {

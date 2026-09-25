@@ -5,10 +5,11 @@ config MC100_APP_PRODUCT
     default y
     help
         Select the minimal autonomous recorder product. The default product
-        initializes the board and SD card, records 16 kHz mono PCM for 600
-        seconds, and then stops in IDLE. Disable this option for the
-        EVT_USB_BENCH diagnostic application; that mode is intended for
-        explicit bench builds and does not provide autonomous recording.
+        initializes the board and SD card, records 16 kHz mono PCM for the
+        configured product duration, and then stops in IDLE. Disable this
+        option for the EVT_USB_BENCH diagnostic application; that mode is
+        intended for explicit bench builds and does not provide autonomous
+        recording.
 
 config MC100_LEGACY_RUNTIME
     bool "Build the legacy Supervisor product runtime"
