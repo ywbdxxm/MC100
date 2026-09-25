@@ -1,6 +1,8 @@
 #include "record_loop.h"
 #include "mc100_audio.h"
+#include "mc100_pcm_filter.h"
 #include "mc100_platform.h"
+#include "mc100_record_settings.h"
 #include "mc100_record_session.h"
 #include "mc100_writer.h"
 #include "esp_heap_caps.h"
@@ -34,6 +36,7 @@ typedef struct {
     /* Capture owns these until it publishes producer_quiesced. */
     unsigned queue_peak, capture_stack_free;
     uint32_t overflows;
+    mc100_pcm_filter_t pcm_filter;
     /* Remaining fields belong only to the storage task. */
     mc100_writer_t *writer;
     bool mounted, writer_begun, writer_healthy;
@@ -89,7 +92,15 @@ static mc100_result_t enqueue_frame(void *context, const mc100_frame_t *frame)
         mc100_record_session_can_enqueue(&r->session);
     portEXIT_CRITICAL(&r->session_lock);
     if (!allowed) return MC100_NOT_READY;
-    if (xQueueSend(r->frame_queue, frame, 0) != pdPASS) {
+    mc100_frame_t processed = *frame;
+    mc100_result_t filter_result = mc100_pcm_filter_process(
+        &r->pcm_filter, processed.pcm, MC100_FRAME_SAMPLES,
+        MC100_RECORD_GAIN_X, MC100_RECORD_DC_BLOCK_ENABLE != 0);
+    if (filter_result != MC100_OK) {
+        latch_fault(r, filter_result, MC100_INCIDENT_INTERNAL_PROTOCOL);
+        return filter_result;
+    }
+    if (xQueueSend(r->frame_queue, &processed, 0) != pdPASS) {
         latch_fault(r, MC100_FULL, MC100_INCIDENT_QUEUE_OVERFLOW);
         return MC100_FULL;
     }
@@ -115,6 +126,7 @@ static void capture_task(void *context)
     record_runtime_t *r = context;
     mc100_assembler_t assembler;
     mc100_assembler_init(&assembler, 0);
+    mc100_pcm_filter_init(&r->pcm_filter);
     mc100_result_t result = mc100_platform_audio_start();
     if (result != MC100_OK) latch_fault(r, result, MC100_INCIDENT_MIC_IO);
     uint8_t pcm[RECORD_PCM_BYTES];
@@ -282,13 +294,19 @@ static void idle(record_runtime_t *r, bool reset_required)
     printf("RECORDER_STOP enqueued=%" PRIu64 " consumed=%" PRIu64
            " written=%" PRIu64 " discarded=%" PRIu64
            " queue_peak=%u overflow=%" PRIu32 " fault=%d reason=%" PRIu32
+           " input_peak=%" PRIu32 " output_peak=%" PRIu32
+           " clipped_samples=%" PRIu64
            " publications=%" PRIu32 " quiesced=%u mounted=%u"
            " capture_stack_free=%u storage_stack_free=%u heap=%u"
            " reset_required=%u\n",
            session.enqueued_frames, session.consumed_frames, r->written_frames,
            r->discarded_frames, session.producer_quiesced ? r->queue_peak : 0,
            session.producer_quiesced ? r->overflows : 0, session.fault,
-           r->incident_reason, r->publications,
+           r->incident_reason,
+           session.producer_quiesced ? r->pcm_filter.input_peak : 0,
+           session.producer_quiesced ? r->pcm_filter.output_peak : 0,
+           session.producer_quiesced ? r->pcm_filter.clipped_samples : 0,
+           r->publications,
            (unsigned)session.producer_quiesced, (unsigned)r->mounted,
            session.producer_quiesced ? r->capture_stack_free : 0,
            (unsigned)uxTaskGetStackHighWaterMark(NULL),
@@ -305,8 +323,11 @@ void mc100_record_run(void)
     portMUX_INITIALIZE(&r->session_lock);
     r->storage_task = xTaskGetCurrentTaskHandle();
     mc100_record_session_init(&r->session);
-    printf("RECORDER_BOOT target_frames=%d queue_frames=%d queue_bytes=%u"
+    printf("RECORDER_BOOT duration_seconds=%d dc_block=%d gain_x=%d"
+           " target_frames=%d queue_frames=%d queue_bytes=%u"
            " runtime_bytes=%u capture_stack_bytes=%d storage_stack_bytes=%d\n",
+           MC100_RECORD_DURATION_SECONDS, MC100_RECORD_DC_BLOCK_ENABLE,
+           MC100_RECORD_GAIN_X,
            MC100_RECORD_TARGET_FRAMES, RECORD_QUEUE_FRAMES,
            (unsigned)sizeof(r->queue_storage), (unsigned)sizeof(*r),
            RECORD_CAPTURE_STACK_BYTES, MC100_RECORD_STORAGE_STACK_BYTES);
