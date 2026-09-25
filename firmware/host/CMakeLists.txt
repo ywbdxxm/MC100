@@ -83,7 +83,9 @@ if(MC100_ENABLE_FUTURE_RUNTIME_TESTS)
     add_test(NAME upload_noop COMMAND test_upload_noop)
 endif()
 
-set(mc100_audio_sources ../components/mc100_audio/frame_assembler.c)
+set(mc100_audio_sources
+    ../components/mc100_audio/frame_assembler.c
+    ../components/mc100_audio/pcm_filter.c)
 if(MC100_ENABLE_FUTURE_RUNTIME_TESTS)
     list(APPEND mc100_audio_sources
         ../components/mc100_audio/audio.c
@@ -112,6 +114,10 @@ add_executable(test_frame_assembler ../tests/test_frame_assembler.c)
 target_link_libraries(test_frame_assembler PRIVATE mc100_audio)
 mc100_host_checks(test_frame_assembler)
 add_test(NAME frame_assembler COMMAND test_frame_assembler)
+add_executable(test_pcm_filter ../tests/test_pcm_filter.c)
+target_link_libraries(test_pcm_filter PRIVATE mc100_audio)
+mc100_host_checks(test_pcm_filter)
+add_test(NAME pcm_filter COMMAND test_pcm_filter)
 add_executable(test_record_assembler_gap ../tests/test_record_assembler_gap.c)
 target_link_libraries(test_record_assembler_gap PRIVATE mc100_audio)
 mc100_host_checks(test_record_assembler_gap)
