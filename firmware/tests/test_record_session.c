@@ -5,7 +5,7 @@
 static void target_boundary(void) {
     mc100_record_session_t s;
     mc100_record_session_init(&s);
-    assert(MC100_RECORD_TARGET_FRAMES == 1000);
+    assert(MC100_RECORD_TARGET_FRAMES == MC100_RECORD_DURATION_SECONDS * 50);
     assert(s.target_frames == MC100_RECORD_TARGET_FRAMES);
     assert(mc100_record_session_can_enqueue(&s));
     mc100_record_session_start(&s, 1000);
@@ -20,8 +20,9 @@ static void deadline_is_bounded(void) {
     mc100_record_session_t s;
     mc100_record_session_init(&s);
     mc100_record_session_start(&s, 1000);
-    assert(MC100_RECORD_DEADLINE_SECONDS == 30);
-    assert(s.deadline_ms == 1000 + MC100_RECORD_DEADLINE_SECONDS * 1000);
+    assert(MC100_RECORD_DEADLINE_SECONDS == MC100_RECORD_DURATION_SECONDS + 10);
+    assert(s.deadline_ms ==
+           1000 + (uint64_t)(MC100_RECORD_DURATION_SECONDS + 10) * 1000);
     assert(!mc100_record_session_deadline_expired(&s, s.deadline_ms - 1));
     assert(mc100_record_session_deadline_expired(&s, s.deadline_ms));
 }
