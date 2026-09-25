@@ -3,7 +3,7 @@
 日期：2026-09-25（Asia/Shanghai）。代码基线：`23b4c4c`。
 
 本轮只验证上电自动录音、持续写入现有 WAV/IDX writer、30,000 帧结束和 IDLE。
-COM7 串口观察与 PC 读卡器文件校验是两个独立门禁。本记录不提供 VAD、电池保护、
+串口观察与 PC 读卡器文件校验是两个独立门禁。本记录不提供 VAD、电池保护、
 声学质量、真断电、耐久或无线的通过结论。
 
 ## 验证状态
@@ -14,9 +14,9 @@ COM7 串口观察与 PC 读卡器文件校验是两个独立门禁。本记录�
 | Host 可控存储故障/会话策略 | PASS（限定范围） | focused 4/4；短写、空间不足、关闭失败、无帧 clean-close 拒绝 |
 | product 构建及依赖图 | PASS | 项目脚本验证目标、SDK、配置、分区；无默认 Supervisor/VAD/旧 runtime |
 | EVT 构建及诊断依赖图 | PASS | EVT 源入口及旧诊断帮助代码保留；不包含 record_loop.c |
-| COM7 写入与哈希校验 | PASS | bootloader、partition-table、app 三个区域校验成功 |
+| 固件写入与哈希校验 | PASS | bootloader、partition-table、app 三个区域校验成功 |
 | product 自动录音至 IDLE | SERIAL PASS | 660.139 s 观察，30,000 帧、2 次 publication、clean close、IDLE，无重启或第三次 publication |
-| 两对 WAV/IDX 的 CRC、FINAL 和时长 | NOT RUN | PC 读卡器 E: 无介质；未取得本次文件 |
+| 两对 WAV/IDX 的 CRC、FINAL 和时长 | NOT RUN | PC 读卡器未提供介质；未取得本次文件 |
 | V1 96 帧队列塞满策略 | HOST PASS；实板 NOT RUN | 默认 Host `record_session` 用 96 项固定容量队列模型验证第 97 帧返回 `MC100_FULL`、首个故障保持锁存、生产者 quiescence 前不丢弃队列且始终禁止 clean-close；真实 FreeRTOS/I2S 调度及生产者停止仍未注入验证 |
 | 实板缺卡/挂载失败的有界退出 | NOT RUN | 本轮使用已插卡，未操作卡或切电 |
 | VAD、无线、自动电池策略、真断电恢复 | DEFERRED | 不属于 V1 本轮验收 |
@@ -37,8 +37,8 @@ ctest --test-dir firmware/out/host --output-on-failure -V -R '^(record_session|s
 （3.35 s）、`100% tests passed, 0 tests failed out of 4`（0.29 s）。
 16 个默认测试是 board_contract、wav、journal_codec、wave_interop、record_session、
 frame_assembler、record_assembler_gap、storage_writer、storage_short_write、rotate_15000、
-space_admission、finalize_faults、writer_publication、driver_contract、com7_client 和
-recording_verifier。
+space_admission、finalize_faults、writer_publication、driver_contract、串口客户端协议测试和
+recording_verifier。测试名称后来调整；这里记录的是当次运行统计，原始 CTest 控制台输出未随仓库发布。
 
 `finalize_faults` 输出为 `15 hard failures, 5 short writes, 2 collisions, release retry
 and normal bytes PASS`。`storage_short_write` 包含短写和空间不足的 INCIDENT 路径；
@@ -56,12 +56,9 @@ future profile 的 `queue_full` 测试属于旧 audio queue，也不能替代目
 
 锁定 SDK 是 ESP-IDF `v6.1`，commit
 `fff9895c82d744c7237be8847347bdd1b07c6643`，SDK tracked files 保持干净。
-本机激活元组：
+机器本地的激活脚本、SDK、工具和 Python 路径不随报告发布。此次验证记录的工具版本为：
 
-- 激活脚本：`C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1`
-- IDF：`C:\esp\v6.1\esp-idf`
-- tools：`C:\Espressif\tools`
-- Python：`C:\Espressif\tools\python\v6.1\venv\Scripts\python.exe`，3.14.7
+- Python 3.14.7
 - ESP32-S3 编译器：`xtensa-esp32s3-elf-gcc` 15.2.0，`esp-15.2.0_20251204`
 - CMake 4.0.3，Ninja 1.12.1，esptool 5.4.0，pyserial 3.5
 
@@ -107,15 +104,15 @@ capture/storage 栈预算分别为 8,192 / 16,384 byte。以上链接期数字�
 | EVT mc100.bin | `ff3fc2ffa3d97c7e369c1e3bf2531ad024f470f3ff6408009f338b754dbba035` |
 | 烧录前 8,388,608 byte Flash 备份 | `6c428112f1fd3ba858acbeeb3264ff0c323bcbe70921938c1691e4a07aedbe37` |
 
-## COM7 操作与观察
+## 串口操作与观察
 
-只使用 COM7。先读取 ROM 芯片和 Flash 信息，再完整备份当前 8 MiB Flash，然后在
+本次操作只针对已确认的目标设备。先读取 ROM 芯片和 Flash 信息，再完整备份当前 8 MiB Flash，然后在
 `firmware/out/target` 中使用该构建生成的 `@flash_args`：
 
 ```powershell
-python -m esptool --chip esp32s3 --port COM7 --after no-reset flash-id
-python -m esptool --chip esp32s3 --port COM7 --baud 460800 --before no-reset --after no-reset read-flash 0 0x800000 <new-local-backup>
-python -m esptool --chip esp32s3 --port COM7 --baud 460800 --before no-reset --after no-reset write-flash '@flash_args'
+python -m esptool --chip esp32s3 --port <PORT> --after no-reset flash-id
+python -m esptool --chip esp32s3 --port <PORT> --baud 460800 --before no-reset --after no-reset read-flash 0 0x800000 <new-local-backup>
+python -m esptool --chip esp32s3 --port <PORT> --baud 460800 --before no-reset --after no-reset write-flash '@flash_args'
 ```
 
 flash 保持 bootloader，打开只读串口记录后调用 SDK 的 `esptool.reset.HardReset`
@@ -127,7 +124,7 @@ flash 保持 bootloader，打开只读串口记录后调用 SDK 的 `esptool.res
 启动实测：`RECORDER_BOARD result=0`；exFAT 首次挂载成功，卷总容量
 63,831,015,424 byte、准备前空闲 63,798,640,640 byte；`RECORDER_PREPARE result=0
 elapsed_ms=469`，随后无需录音命令进入 `RECORDING`。本轮卡品牌/型号与 CID 未重新
-确认；历史 2026-09-19 报告中的“用户确认闪迪 64 GB”仅作为历史背景。
+确认；历史 2026-09-19 报告中用户确认的闪迪 64 GB 信息仅作为实验背景。
 
 600.970 s 时记录 `RECORDER_CLOSE result=0 clean=1 last_seq=29999`，并发布第二段；
 600.972 s 进入 IDLE。两个串口报告的 publication 为：
@@ -155,7 +152,7 @@ IDLE 后继续观察约 59.167 s，没有第三次 publication、自动重录或
 
 ## PC 读卡验证和剩余门禁
 
-电脑枚举到 E: 为 removable，但容量 0、无文件系统和介质。本轮无法从软件完成板子
+读卡器当时未提供有效介质。本轮无法从软件完成板子
 物理断电、取卡并移到读卡器，因此未复制 WAV/IDX 或 reserve `.part`，也未对本次
 硬件输出调用 `verify_recording.py`。`recording-verification.json` 中对应字段是
 `NOT RUN`、`valid=null`、`complete=null`，不能将串口 publication 代替 CRC/FINAL 读回。
@@ -168,9 +165,9 @@ IDLE 后继续观察约 59.167 s，没有第三次 publication、自动重录或
 
 ## 证据定位
 
-- [带主机时间戳的 COM7 串口原始日志](../../evidence/2026-09-25-mc100-minimal-recorder/serial-com7.log)
-- [验证状态、构建组件、Host 输出及哈希](../../evidence/2026-09-25-mc100-minimal-recorder/recording-verification.json)
-- 本机完整构建/Host/flash 日志、Flash 备份和产品镜像归档位于本次 SDD 工作目录。
+- [带主机时间戳的串口日志（端口号已匿名化）](../../evidence/2026-09-25-mc100-minimal-recorder/serial-target.log)
+- [验证状态、构建组件、Host 统计及哈希](../../evidence/2026-09-25-mc100-minimal-recorder/recording-verification.json)
+- 完整构建、Host、烧录日志和镜像归档属于本次验证的临时证据，不作为源码依赖。
 
 没有格式化、删除或手工覆盖卡数据，没有故障切电、修改 eFuse 或安装工具。正常
 录音所需的 writer 创建新会话文件属于用户授权的验证行为。最终状态依赖本轮实际

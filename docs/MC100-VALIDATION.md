@@ -1,89 +1,65 @@
 # MC100 验证与状态
 
-更新时间：2026-09-25
+更新时间：2026-09-26
+
+本页是当前状态的唯一入口。状态含义：
+
+- PASS：对应门禁有完整证据。
+- PARTIAL：部分证据通过，仍有明确缺口。
+- BLOCKED：已有具体阻塞，待排查。
+- NOT RUN：尚未执行。
+- DEFERRED：明确延期到后续阶段。
+- OPEN：需要数据或决策，尚未放行。
 
 ## 1. 当前结论
 
-| 项目 | 状态 | 证据/说明 |
+| 项目 | 状态 | 证据和限制 |
 | --- | --- | --- |
-| 硬件身份 | PARTIAL PASS | COM7 识别为 ESP32-S3、8 MB Flash、USB Serial/JTAG；原理图/PCB 快照已归档 |
-| PDM 采集 | EVT PASS @80 MHz | 约 10 秒、501 帧、0 timeout/error |
-| WAV/索引/CRC | HOST PASS | 格式边界、损坏拒绝、CRC 和 Python WAV 互操作已测 |
-| SD 录音写入 | EVT PASS（单卡） | 64 GB exFAT，3 秒及约 305 秒记录读回通过 |
-| Host 默认 V1 套件 | PASS (17/17) | PCM 处理器加入后，MSVC 干净构建与独立 CTest 为 17/17；可控存储故障/会话策略 focused 4/4；不代表实板 |
-| product / EVT 目标构建 | product PASS；EVT PASS | 锁定 v6.1 的当前 product 与 EVT 图均通过，`mc100.bin`、bootloader 和分区大小检查均通过；product 镜像另已在 COM7 完成三段 Hash 校验 |
-| 产品 boot → configured record → idle | 旧 600 s 串口 PASS；当前版本 BLOCKED | 当前 product 镜像已写入 COM7 且三段 Hash 校验通过，但复位后停在 ROM `DOWNLOAD (boot:0x0)`，未取得 `RECORDER_BOOT/STOP/IDLE`；疑似 GPIO0/BOOT 或复位时序，需释放 BOOT 后重试。SD 未操作，WAV/IDX、峰值和削波计数仍待记录 |
-| 产品 PCM 处理器 | HOST PASS；声学 NOT RUN | DC blocking、增益、饱和、跨帧连续性、非法参数和小信号算术均已由 `test_pcm_filter` 覆盖。Host 结果不能证明麦克风灵敏度、声孔、PDM 电气裕量或播放听感 |
-| V1 队列塞满故障注入 | 实板 NOT RUN；HOST PASS | 默认 Host 用 96 项 `mc100_frame_t` 队列模型验证第 97 帧拒绝、首个 `MC100_FULL` 锁存及 quiescence 前后禁止 clean close；只覆盖可移植会话策略，真实 FreeRTOS/I2S 调度及生产者停止仍未注入验证 |
-| VAD 选型 | OPEN | libfvad 有 80 MHz 工程探针；esp-sr 当前 runtime 内存失败 |
-| 40 MHz PDM | BLOCKED | 固定 40 MHz 在 PDM 启动阶段触发 Task WDT；DFS 活跃为 80 MHz |
-| 真断电恢复 | DEFERRED | 不在当前 V1 产品验收范围；恢复核心仅有 Host 测试 |
-| 扇区级故障 | NOT RUN | 真实卡故障注入和门禁尚未完成 |
-| 电池、功耗、声学、耐久 | NOT RUN | 尚无发布结论 |
-| 无线回传 | DEFERRED | 当前不启用，不进入本阶段验收 |
+| 板级身份和原理图连接 | PARTIAL | ESP32-S3-MINI-1-N8、8 MB Flash、无 PSRAM 和引脚契约已由源码/原理图固定；制造和电气裕量未完成 |
+| Host 默认 V1 套件 | PASS | 2026-09-26 复跑 17/17（历史报告的 16/16 后新增 PCM filter）；保留运行时套件 39/39；覆盖 PCM filter、record session、WAV/IDX、CRC、writer 和故障路径 |
+| product 目标构建 | PASS | ESP-IDF v6.1、esp32s3、8 MB Flash、无 PSRAM、无线排除和自定义分区检查通过 |
+| evt 目标构建 | PASS | 同一 SDK/目标下构建和配置检查通过 |
+| EVT PDM 连续采集 | PASS（历史台架） | 80 MHz 路径约 10 秒、501 帧、无 timeout/error；只适用于记录中的硬件和配置 |
+| EVT SD/WAV/IDX/CRC | PASS（历史台架） | 单卡 3 秒及约 305 秒分段读回通过；不等于 product 当前版本已验收 |
+| product 自动录音至 IDLE | BLOCKED（当前可配置版本） | 镜像已烧录且 bootloader、分区、app 三段哈希校验通过；最近一次复位停在 ROM `DOWNLOAD (boot:0x0)`，未输出 `RECORDER_BOOT`。历史版本的 600 秒串口录音至 IDLE 另有记录；先检查 GPIO0/BOOT 和复位时序，再重测当前版本 |
+| product WAV/IDX 读卡校验 | NOT RUN | 当前可配置版本尚未把目标文件交给读卡器并运行 verifier |
+| PCM 处理器 | PASS（Host）；声学 OPEN | DC blocking、增益、跨帧、饱和和非法参数有 Host 证据；真实声压、噪声和听感未测 |
+| 队列满和写入故障 | PASS（Host）；实板 NOT RUN | Host 验证 96 帧容量、故障锁存和禁止 clean close；真实 FreeRTOS/I2S/SD 调度仍待注入 |
+| 40 MHz PDM | BLOCKED | 当前 ESP-IDF v6.1/ESP32-S3 tuple 的固定 40 MHz 启动实验卡在 I2S enable；活动 PDM 需要 80 MHz |
+| VAD 选型 | OPEN | libfvad 有资源探针；无 PSRAM 的 esp-sr VADNet 配置初始化因内存不足失败，尚无公平语料比较 |
+| 真断电恢复 | DEFERRED | V1 先完成正常收尾和读卡闭环 |
+| 拔卡、满卡、扇区故障、多卡 | NOT RUN | 尚无目标板故障注入证据 |
+| 电池、功耗、温升、耐久 | NOT RUN | 尚无校准仪器和长期记录 |
+| 无线回传 | DEFERRED | 不进入 V1 |
 
-## 2. 已有证据
+## 2. 当前产品验收门槛
 
-- [2026-09-19 EVT 录音报告](reports/2026-09-19-evt-recording.md)
-- [2026-09-25 最小录音产品验证](reports/2026-09-25-mc100-minimal-recorder.md)
-- [2026-09-19 exFAT 决策记录](reports/2026-09-19-exfat-decision.md)
-- [2026-09-23 PM/VAD 实验](software/2026-09-23-mc100-pm40-vad-spike.md)
-- [原理图复核](hardware/MC100-SCHEMATIC-REVIEW.md)
-- [PCB 复核](hardware/MC100-PCB-REVIEW.md)
+product V1 必须同时满足：
 
-## 3. 当前优先级
+1. 目标设备上电后自动进入 RECORDING，不依赖 USB 命令。
+2. 录音达到配置时长后停止，capture producer quiesce，writer clean close，进入 IDLE。
+3. 录音过程中能观察到边采集边写入，不能只在结束时生成内存中的整段数据。
+4. 通过读卡器取得同 stem 的 WAV/IDX，验证 WAV 参数、连续序号、每块 CRC 和 FINAL。
+5. 固定声源条件下记录输入峰值、输出峰值、削波计数和主观听感；文件完整性不能替代声学结论。
 
-### P0：整理和最小录音闭环
+当前可配置 product 最近一次复位尚未进入应用，上述五项实板验收都需要重新记录，因此 V1 尚未标记为完整 PASS。
 
-- 只保留一个项目入口、一个硬件摘要、一个软件摘要和一个状态页。
-- 旧版本曾在 COM7 观察到自动录音至 IDLE；当前可调音频版本仍需完成 COM7 串口 smoke，并通过 PC 读卡器校验本次 WAV/IDX。
-- 重新验证产品 PCM 处理版本：先用默认 20 秒/8 倍配置，再按需要调整 `MC100_RECORD_DURATION_SECONDS`、`MC100_RECORD_GAIN_X` 和 `MC100_RECORD_DC_BLOCK_ENABLE`。记录 `RECORDER_BOOT` 配置、`RECORDER_STOP` 峰值/削波计数，并用固定声源、距离和方向对比未处理基线。
-- 补齐本次卡型号/CID、文件 CRC/FINAL，以及真实 FreeRTOS/I2S 队列饱和与生产者停止注入；Host 队列模型已覆盖策略边界。
+## 3. 验证记录
 
-### P1：存储可靠性
+- [2026-09-19 EVT 录音报告](reports/2026-09-19-evt-recording.md)：历史台架录音、exFAT、分段和 CRC 证据。
+- [2026-09-25 最小录音记录](reports/2026-09-25-mc100-minimal-recorder.md)：历史 product 构建和串口观察；读卡器门禁保持未完成。
+- [2026-09-19 exFAT 决策](reports/2026-09-19-exfat-decision.md)：文件系统选择背景。
+- [2026-09-23 PM/VAD spike](software/2026-09-23-mc100-pm40-vad-spike.md)：功耗/VAD 探针，不是产品路径。
+- [硬件复核](hardware/MC100-SCHEMATIC-REVIEW.md) 和 [PCB 复核](hardware/MC100-PCB-REVIEW.md)：板级依据。
 
-- 多卡和卡检测极性。
-- 写入延迟、轮换、拔卡和空间不足。
-- 启动恢复和真实断电；在证据不足前不宣称“任意掉电不丢”。
+历史记录中的串口、路径、卡容量和个人环境只描述当次实验，不能作为新开发者的固定前提。
 
-### P2：自动触发
+## 4. 可复现命令
 
-- 选择并集成 VAD。
-- 决定是否保留 2 秒预录和 15 秒静音结束。
-- 用授权语料和板上声学场景验证召回、延迟和误触发。
-
-### P3：电池与耐久
-
-- ADC 标定、低电策略、电流和温升。
-- 24/48 小时测试。
-- 多板和装壳验证。
-
-### P4：无线
-
-- 另立需求和设计；当前只保留硬件能力，不实现回传。
-
-## 4. 证据规则
-
-- Host 测试通过只说明可移植逻辑通过。
-- Target 构建通过只说明固件可构建。
-- EVT 台架录音通过只说明台架路径在指定卡上工作。
-- 产品完整验收需要 COM7 实板日志和读卡器校验共同完成；当前仅 `SERIAL PASS`，文件校验保持 `NOT RUN`，不能写作完整产品 PASS。
-- 声学、电池、真断电和长期耐久必须有独立实板记录。
-- 不把估算、电流预算或文档中的目标写成实测 PASS。
-
-## 5. 音量实验边界
-
-`MC100_RECORD_GAIN_X` 是产品路径上的整数数字增益，8 倍约为 +18 dB；它会同时放大噪声，输出削波由 `RECORDER_STOP` 的 clip 计数暴露。`MC100_RECORD_DC_BLOCK_ENABLE` 只去除慢变化直流估计，不会提升真实交流声压或麦克风灵敏度。WAV/IDX CRC、峰值变化和主观试听只能说明当前录音链路的处理结果，不能单独判定硬件声学合格。
-
-放行声学结论前，必须在同一声源、距离、声孔方向和播放增益下比较原始路径与处理路径；若仍过低或噪声明显，应测量麦克风 VDD、PDM 时钟/数据和实际声孔路径，再决定是否修改硬件或 PDM 配置。
-
-## 6. 可复现命令
-
-```powershell
+~~~powershell
 pwsh -File firmware/tools/test-host.ps1 -Clean
-pwsh -File firmware/tools/test-host.ps1 -Clean -FutureRuntimeTests
 pwsh -File firmware/tools/build.ps1 -Profile product -Clean
-pwsh -File firmware/tools/build.ps1 -Profile evt -Clean
-```
+pwsh -File firmware/tools/build.ps1 -Profile evt -OutputDirectory out/target-evt -Clean
+~~~
 
-默认 Host 套件是 V1 录音路径；`-FutureRuntimeTests` 会在 V1 测试上增加保留的旧运行时测试。上述构建结果不替代 COM7 和 SD 卡物理证据。
+Host/Target 构建通过只证明对应软件层级通过；目标板、SD 卡、声学、电池和耐久证据必须单独记录。

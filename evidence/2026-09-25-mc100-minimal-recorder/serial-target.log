@@ -1,4 +1,4 @@
-[00000.000] HOST_CAPTURE_START utc=2026-09-24T21:14:03.509248+00:00 port=COM7 baud=115200 duration_seconds=660
+[00000.000] HOST_CAPTURE_START utc=2026-09-24T21:14:03.509248+00:00 port=<PORT> baud=115200 duration_seconds=660
 [00000.000] HOST_RESET once=1 method=esptool.reset.HardReset uses_usb=1
 [00000.402] ESP-ROM:esp32s3-20210327
 [00000.402] Build:Mar 27 2021

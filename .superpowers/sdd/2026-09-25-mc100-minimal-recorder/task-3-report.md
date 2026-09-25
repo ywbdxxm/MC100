@@ -112,11 +112,7 @@ edge while leaving `mc100_supervisor` absent from the default product graph.
 
 ## Fix-round target verification
 
-Activated with:
-
-```powershell
-. 'C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1'
-```
+Used the project-locked ESP-IDF v6.1 environment; the machine-local activation path is omitted.
 
 Then ran:
 

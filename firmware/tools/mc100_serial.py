@@ -1,4 +1,4 @@
-"""Bounded MC100 EVT client. COM7 is the only permitted serial endpoint.
+"""Bounded MC100 EVT client for an explicitly selected serial endpoint.
 
 No enumeration, alternate-port fallback, format, deletion, or arbitrary commands.
 Run with the project's IDF Python (pyserial), not an ambient Python installation.
@@ -11,7 +11,6 @@ import secrets
 import time
 import zlib
 
-PORT = "COM7"
 READY = "MC100_READY"
 
 
@@ -53,12 +52,15 @@ def decode_transfer(lines, name, offset, requested):
 
 
 class Connection:
+    def __init__(self, port):
+        self.port = port
+
     def __enter__(self):
         import serial
         self.serial = serial.Serial(port=None, baudrate=115200, timeout=0.2, write_timeout=3)
         self.serial.dtr = False
         self.serial.rts = False
-        self.serial.port = PORT
+        self.serial.port = self.port
         self.serial.open()
         self.buffer = bytearray()
         # Drain bounded startup/stale output without toggling reset or other ports.
@@ -106,11 +108,14 @@ class Connection:
                     if completed:
                         return lines
                     lines = []  # Unsolicited boot/stale output is not our reply.
-        raise TimeoutError(f"COM7 did not complete {command.split()[0]}: {lines[-5:]}")
+        raise TimeoutError(
+            f"Target serial endpoint did not complete {command.split()[0]}: {lines[-5:]}"
+        )
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--port", required=True, help="Explicit target serial endpoint")
     commands = parser.add_subparsers(dest="operation", required=True)
     commands.add_parser("status")
     commands.add_parser("list")
@@ -136,12 +141,12 @@ def main():
             parser.error("Output must be a new file below firmware/out")
         if args.operation == "read" and (args.offset < 0 or args.offset > 0xFFFFFFFF or not 1 <= args.count <= 1024):
             parser.error("Read offset must fit FAT32 and count must be 1..1024")
-    with Connection() as connection:
+    with Connection(args.port) as connection:
         connection.synchronize()
-        # Status handshake also rejects a different/non-EVT firmware on COM7.
+        # Status handshake also rejects a different or non-EVT firmware.
         status = connection.command("status")
         if not any("STATUS mode=EVT_USB_BENCH" in line for line in status):
-            raise RuntimeError("COM7 is not running MC100 EVT bench firmware")
+            raise RuntimeError("Selected endpoint is not running MC100 EVT bench firmware")
         if args.operation == "status":
             print("\n".join(status))
         elif args.operation == "list":

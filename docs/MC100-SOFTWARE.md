@@ -1,96 +1,81 @@
-# MC100 软件
+# MC100 软件说明
 
-## 1. 当前范围
+本页说明当前 V1 的数据流、代码边界和设计取舍。它不记录某次个人设备操作；当前状态和证据统一见 [MC100-VALIDATION.md](MC100-VALIDATION.md)。
 
-第一目标是让板子稳定完成：
+## 1. V1 数据流
 
-```text
-PDM → PCM → WAV → microSD
-```
+~~~text
+product:
+PDM RX → PCM 320 samples / 20 ms → DC blocking → digital gain
+       → 96-frame bounded queue → storage owner → WAV/IDX writer → microSD
+       → FINAL publication → IDLE
 
-无线回传不在当前软件范围内。VAD、预录和掉电恢复已有部分实现，但先作为独立验证项处理，不能把 Host 通过写成最小录音链路的实板完成。
+evt:
+USB command → PDM RX/PCM → optional capture or writer → WAV/IDX → response
+~~~
 
-## 2. 当前代码分区
+产品路径中，捕获任务拥有音频输入和 PCM 处理状态；存储任务拥有 SD、writer 和文件句柄。捕获和存储通过固定容量队列通信，队列满、超时、写入失败和收尾失败都会锁存故障，不能把未完成文件报告为 clean close。
 
-| 目录 | 作用 | 当前判断 |
+录音按 20 ms 帧计数。默认时长 20 秒，宏允许 3..600 秒。writer 约 300 秒轮换一个 WAV/IDX 对，因此长会话会产生多个已发布分段；录音并不是等到结束才一次性写卡。
+
+## 2. 固件 Profile 与 Host 测试
+
+| 入口 | 责任 | 不包含 |
 | --- | --- | --- |
-| `components/mc100_platform_espidf` | I2S PDM、SD/FAT、板级 IO | 目标适配层 |
-| `components/mc100_audio` | PCM 帧组装、预录银行、有界队列、VAD 接口 | 可复用核心；VAD 仍是占位 |
-| `components/mc100_storage` | WAV、索引、CRC、写入和恢复 | 已有较完整实现，实板仍需验证 |
-| `components/mc100_core` | 状态机、电池策略、上传 no-op 接口 | 状态机偏产品化，上传接口暂不使用 |
-| `components/mc100_supervisor` | 旧录音生命周期编排 | 保留供 future profile，不在默认产品图中 |
-| `components/mc100_recorder` | 可配置录音 session 策略和产品设置 | 默认产品路径；设置见 [`mc100_record_settings.h`](../firmware/components/mc100_recorder/include/mc100_record_settings.h)，策略见 [`mc100_record_session.h`](../firmware/components/mc100_recorder/include/mc100_record_session.h) |
-| `main/evt_capture.c` | 手动 USB 台架工具 | 保留作 EVT 诊断，不是最终产品流程 |
-| `host/`、`tests/` | Host 假 IO、格式/故障/生命周期测试 | 测试资产，不是固件功能 |
+| product | 上电、挂载 SD、创建 writer、持续录音、收尾、IDLE | USB 命令控制、VAD、无线、电池自动化 |
+| evt | USB 命令触发采集/录音、下载和 CRC 读回 | 产品自动录音策略 |
+| Host 可选 future 测试 | 旧 supervisor、预录、VAD 和状态测试 | 默认固件运行路径 |
 
-## 3. 当前运行路径
+product 和 evt 是两个目标固件 profile，使用同一套 WAV/IDX 格式、CRC 和 writer。Host 的 future 开关只增加本机测试，不生成第三种目标固件；EVT 的测试入口不能被误认为产品启动流程。
 
-EVT 路径用于确定性验证：由 USB 命令启动采集或录音，写 WAV 和索引，再由工具下载、校验和读回。
+## 3. 组件职责
 
-默认产品路径由 `app_main` 启动 `record_loop`，上电后自动录音。捕获任务在产品路径中复制每个 320 样本帧，使用一个跨帧保持状态的 PCM 处理器完成可选直流阻断和数字增益，然后再入现有有界队列：
+下表路径均相对于 `firmware/`。
 
-```text
-BOOT → PDM/PCM → DC blocking → gain → WAV/IDX writer → configured duration → CLOSE → IDLE
-```
+| 路径 | 责任 | V1 地位 |
+| --- | --- | --- |
+| components/mc100_platform_espidf | I2S PDM、SD/FAT、板级 IO 和时间 | 必需 |
+| components/mc100_audio | 帧组装、跨帧 PCM filter | 必需；VAD/预录文件保留 |
+| components/mc100_recorder | 时长、帧数上限、deadline、产品设置 | 必需 |
+| components/mc100_storage | WAV、IDX、CRC、journal、writer、恢复 | 必需 |
+| components/mc100_core | 通用类型、状态和电池/上传接口 | 类型依赖；未来功能 |
+| components/mc100_supervisor | 旧生命周期编排 | future；默认 product 不链接 |
+| main/record_loop.c | 自动录音入口、队列和任务 owner | product 入口 |
+| main/evt_capture.c、evt_commands.c | USB 诊断入口 | evt 入口 |
+| host/、tests/ | 假 IO、格式测试、故障注入和协议测试 | 不进入固件 |
 
-每帧 20 ms，录音时长由 `MC100_RECORD_DURATION_SECONDS` 设置，合法范围为 3–600 秒，默认 20 秒；目标帧数为时长乘 50，安全 deadline 为时长加 10 秒。现有 writer 约 5 分钟轮换，因此超过 300 秒的 session 会产生多个 WAV/IDX 对；短 session 通常产生一对，可能保留一个 reserve `.part` 对。EVT USB 命令入口独立保留作诊断，不是产品流程。VAD、预录、电池自动化、无线和真实掉电恢复均延期。
+仓库文件数量大于 V1 运行图，是因为存储可靠性、错误注入、旧 runtime 和 VAD spike 都需要独立测试。读者只需先看 product 入口及上表。
 
-### 产品音频设置
+## 4. 产品设置
 
-设置头文件是 `firmware/components/mc100_recorder/include/mc100_record_settings.h`：
+设置头文件为 firmware/components/mc100_recorder/include/mc100_record_settings.h：
 
 | 宏 | 默认 | 范围 | 含义 |
 | --- | ---: | ---: | --- |
-| `MC100_RECORD_DURATION_SECONDS` | `20` | `3..600` | 第一帧开始计的录音秒数 |
-| `MC100_RECORD_DC_BLOCK_ENABLE` | `1` | `0/1` | Q16 直流阻断开关 |
-| `MC100_RECORD_GAIN_X` | `8` | `1..16` | 线性数字增益，8 倍约 +18 dB |
+| MC100_RECORD_DURATION_SECONDS | 20 | 3..600 | 第一帧开始计的秒数 |
+| MC100_RECORD_DC_BLOCK_ENABLE | 1 | 0/1 | Q16 直流阻断 |
+| MC100_RECORD_GAIN_X | 8 | 1..16 | 线性数字增益 |
 
-宏值在编译期校验。修改后使用 `pwsh -File firmware/tools/build.ps1 -Profile product -Clean`，不能用裸 `idf.py build` 替代项目脚本。处理器使用 64 位中间值并在输出端饱和到有符号 16-bit；`RECORDER_BOOT` 打印 `duration_seconds`、`dc_block` 和 `gain_x`，`RECORDER_STOP` 在捕获任务退出后打印 `input_peak`、`output_peak` 和 `clipped_samples`。EVT 路径、writer、WAV/IDX 格式和 SD 文件协议保持不变。
+PCM filter 使用跨帧状态、64 位中间值和 signed 16-bit 饱和。增益可用于听感实验，会同时放大噪声；DC blocking 消除的是慢变化偏置，不会增加麦克风实际灵敏度。RECORDER_BOOT 报告解析后的设置，RECORDER_STOP 报告输入峰值、输出峰值和削波计数。
 
-增益只用于当前听感实验。它也会放大噪声，削波计数非零时说明输入或增益已超出 16-bit 动态范围；直流阻断不会增加真实交流信号幅度。文件完整性、峰值变化和试听结果都不能单独证明麦克风灵敏度、声孔或整机声学链路合格，声学结论必须在固定声源、距离、方向下另行验证。
+## 5. 文件和故障语义
 
-## 4. 代码复杂度边界
+- WAV 保存 16 kHz、16-bit、单声道 PCM。
+- IDX 保存数据块的序号、偏移和 CRC；FINAL 表示正常收尾。
+- .part 表示尚未发布的临时文件；INCIDENT 或故障状态不能当作完整录音。
+- writer 通过 generation、预分配、CRC 和 publication 防止旧会话或未完成尾部被误读。
+- 恢复逻辑只在 Host 和明确的目标测试中启用；真实掉电恢复尚未放行。
 
-当前实现包含双预录银行、96 帧队列、状态机、generation、CRC 索引、预分配和恢复器。这些机制服务于“自动触发且尽量不丢录音”的产品目标，但不应被误认为硬件本身必须如此复杂。
+## 6. 当前明确不做的事情
 
-整理后的开发顺序是：
+V1 不引入新的无线协议、AI 模型、自动 VAD、复杂后台任务或电池状态机。VAD/预录只有在最小录音闭环、内存预算、功耗和真实音频数据齐备后再评估。
 
-1. 先验证最小连续录音和 WAV 写卡；
-2. 再验证卡延迟、轮换和掉电恢复；
-3. 再决定是否启用 VAD、预录和静音结束；
-4. 最后单独规划无线回传。
+## 7. 构建和验证入口
 
-在第 1 步完成前，不新增无线、AI 模型、复杂配置或新的后台任务。
-
-## 5. 当前已知问题
-
-- 40 MHz PDM 启动实验未通过；DFS 活跃点为 80 MHz。
-- esp-sr VADNet1 medium 当前无 PSRAM runtime 初始化失败；没有完成 VAD 选型。
-- 旧产品版本已通过 COM7 boot → 600 s continuous record → IDLE 串口 smoke；当前默认 20 秒、带 PCM 处理版本的 product 目标构建和镜像写入校验已通过，但复位后进入 ROM DOWNLOAD，需先释放 BOOT/确认复位时序，再执行串口 smoke 和 SD 文件 CRC/FINAL 读回。
-- 真断电恢复仍延期；扇区级故障、多卡、声学、电池和长期耐久均未放行。
-
-## 6. 保留的安全规则
-
-- 固件不自动格式化、删除或覆盖 SD 卡上的历史录音。
-- 音频采集和存储各有明确 owner；音频路径不能等待 SD 写入，监控任务不能直接操作 I2S 或文件句柄。
-- 录音文件正常结束写 `FINAL`；有界故障前缀写 `INCIDENT` 或保留 `.part`，不能把未验证尾部当作完整录音。
-- 启动恢复只生成新副本并保留原件；恢复算法通过 CRC 和连续前缀判断有效数据，不能凭预分配长度猜测录音。
-- 任何 Host、Target 或 EVT 结果只对对应层级成立，未运行的实板项目保持 `NOT RUN`。
-
-## 7. 构建
-
-Host：在 MSVC Developer PowerShell 中运行：
-
-```powershell
+~~~powershell
 pwsh -File firmware/tools/test-host.ps1 -Clean
-pwsh -File firmware/tools/test-host.ps1 -Clean -FutureRuntimeTests
-```
-
-Target：在项目锁定的 ESP-IDF v6.1 环境中运行：
-
-```powershell
-pwsh -File firmware/tools/build.ps1 -Profile evt -Clean
 pwsh -File firmware/tools/build.ps1 -Profile product -Clean
-```
+pwsh -File firmware/tools/build.ps1 -Profile evt -OutputDirectory out/target-evt -Clean
+~~~
 
-只在明确需要产品路径时构建 `product` profile。不要混用 SDK、Python、CMake 或 Ninja 环境。
+构建结果、Host 结果、目标板结果和未完成门禁只在 [MC100-VALIDATION.md](MC100-VALIDATION.md) 维护。

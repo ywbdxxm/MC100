@@ -48,7 +48,7 @@ Configuration and statistics are printed once per session, not per frame.
 Host tests cover constant DC, a step after initialization, low-level samples
 that reveal premature integer rounding, bypass identity, gain, clipping,
 invalid gain, and continuity across frame boundaries. Build the product firmware with the
-locked ESP-IDF v6.1/ESP32-S3 tuple. If COM7 and a card are available, capture
+locked ESP-IDF v6.1/ESP32-S3 tuple. If target serial port and a card are available, capture
 a short session and verify the final WAV/IDX with the existing verifier.
 Compare processed audio with the unchanged baseline at the same source level,
 distance, and microphone orientation. If the result is still too quiet or

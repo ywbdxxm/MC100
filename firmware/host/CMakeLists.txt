@@ -269,7 +269,7 @@ target_link_libraries(test_evt_commands PRIVATE mc100_audio mc100_writer)
 mc100_host_checks(test_evt_commands)
 add_test(NAME evt_commands COMMAND test_evt_commands)
 endif()
-add_test(NAME com7_client COMMAND ${Python3_EXECUTABLE}
-    ${CMAKE_CURRENT_SOURCE_DIR}/../tests/test_com7_client.py)
+add_test(NAME serial_client COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../tests/test_serial_client.py)
 add_test(NAME recording_verifier COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/../tests/test_recording_verifier.py)

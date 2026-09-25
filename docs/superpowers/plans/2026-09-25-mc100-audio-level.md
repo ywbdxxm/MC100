@@ -68,7 +68,7 @@
 - [x] Initialize one filter state in the capture-owned runtime. In the frame callback, copy the 320-sample frame, call the processor with the settings macros, and enqueue the processed copy. On processing error, latch the existing capture fault path.
 - [x] Add configuration to `RECORDER_BOOT` and filter metrics to `RECORDER_STOP`; only read capture metrics after producer quiescence. Keep existing queue and storage ownership unchanged.
 - [x] Document the settings header, 20-second default, gain caveat, expected WAV/IDX output, and exact `-Profile product` build command. Update validation status without claiming a listening pass.
-- [ ] Run host suite and locked target build. If COM7 and SD are available, run a 20-second capture, verify WAV/IDX, log peaks and clips, then commit. Otherwise record the physical test as pending and commit the verified software.
+- [ ] Run host suite and locked target build. If target serial port and SD are available, run a 20-second capture, verify WAV/IDX, log peaks and clips, then commit. Otherwise record the physical test as pending and commit the verified software.
 
 ### Task 4: Independent Review
 

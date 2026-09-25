@@ -6,7 +6,7 @@
 
 **Architecture:** Add a small portable recorder-session policy and a target-only recorder loop. The capture task owns PDM/I2S and feeds a statically aligned 96-frame queue; the recorder task owns board/SD mount and the existing writer, drains the queue after producer quiescence, and closes files. Gate the legacy Supervisor/VAD/product runtime and their tests out of the default product graph while keeping their source available for a future profile.
 
-**Tech Stack:** ESP-IDF v6.1 (`fff9895c82d744c7237be8847347bdd1b07c6643`), ESP32-S3-MINI-1-N8 without PSRAM, C11, FreeRTOS, ESP-IDF I2S PDM, SDMMC/FatFs, CMake/Ninja/CTest, MSVC host tests, COM7 validation.
+**Tech Stack:** ESP-IDF v6.1 (`fff9895c82d744c7237be8847347bdd1b07c6643`), ESP32-S3-MINI-1-N8 without PSRAM, C11, FreeRTOS, ESP-IDF I2S PDM, SDMMC/FatFs, CMake/Ninja/CTest, MSVC host tests, target serial port validation.
 
 **Spec:** `docs/superpowers/specs/2026-09-25-mc100-minimal-recorder-design.md`
 
@@ -21,7 +21,7 @@
 - Queue full, capture gap, writer error, and deadline expiration never publish a clean WAV; they produce an incident/partial close when the writer API permits it.
 - Normal writer rotation and the existing `.wav`/`.idx` format remain unchanged. A reserve `.wav.part`/`.idx.part` pair may remain after preparation.
 - VAD, pre-roll, Supervisor, battery wait/monitor, upload, wireless, and true power-loss recovery are not in the default product path.
-- Never format, delete, or overwrite unrelated SD-card files during validation. Use COM7 only for board/serial operations; read the card with a PC card reader after power-down.
+- Never format, delete, or overwrite unrelated SD-card files during validation. Use target serial port only for board/serial operations; read the card with a PC card reader after power-down.
 
 ---
 
@@ -74,7 +74,7 @@ Keep `mc100_format`, `mc100_writer`, `mc100_fake_io`, `test_wav`,
 `wave_interop`, `journal_codec`, `frame_assembler`, `storage_writer`,
 `storage_short_write`, `rotate_15000`, `space_admission`, `finalize_faults`,
 `writer_publication`, `board_contract`, `driver_contract`,
-`recording_verifier`, and `com7_client` available to the default profile.
+`recording_verifier`, and `serial_client` available to the default profile.
 
 - [ ] **Step 3: Run the default host configure and list tests.**
 
@@ -496,7 +496,7 @@ new recorder-session policy. Keep the EVT USB path as a diagnostic profile.
 - [ ] **Step 2: Update the validation table before hardware testing.**
 
 Add an explicit row for `product boot -> 600 s record -> idle` with status
-`NOT RUN` until COM7 evidence exists. State that a normal run expects two clean
+`NOT RUN` until target serial port evidence exists. State that a normal run expects two clean
 WAV/index pairs and may leave a reserve `.part` pair.
 
 - [ ] **Step 3: Update build and test commands.**
@@ -534,14 +534,14 @@ git commit -m "docs: describe MC100 minimal recorder validation"
 
 **Files:**
 
-- Create: `evidence/2026-09-25-mc100-minimal-recorder/serial-com7.log`
+- Create: `evidence/2026-09-25-mc100-minimal-recorder/serial-target.log`
 - Create: `evidence/2026-09-25-mc100-minimal-recorder/recording-verification.json`
 - Modify: `docs/MC100-VALIDATION.md`
 - Modify: `docs/reports/2026-09-25-mc100-minimal-recorder.md`
 
 **Interfaces:**
 
-- Board operations use COM7 only.
+- Board operations use target serial port only.
 - Card verification happens after power-down through a PC card reader and uses
   `firmware/tools/verify_recording.py`; it must not modify card contents.
 
@@ -569,10 +569,10 @@ Record the target, SDK revision, image size, component list, queue bytes, task
 stack sizes, and static-analysis/build result. Do not treat this as hardware
 validation.
 
-- [ ] **Step 3: Flash and observe COM7.**
+- [ ] **Step 3: Flash and observe target serial port.**
 
 Using the existing procedure in `docs/hardware/MC100-PROGRAMMING.md`, flash the
-product image through COM7 and capture boot output for at least 11 minutes.
+product image through target serial port and capture boot output for at least 11 minutes.
 Confirm logs show board/SD preparation, automatic recording start, one clean
 rotation, final close, publication names, and `IDLE` without a third clean
 file. Record queue high-water, drops/faults, and task stack high-water marks.
@@ -620,7 +620,7 @@ git commit -m "test: record MC100 minimal recorder validation"
 - [ ] Default Host CTest passes and future-runtime tests are separately gated.
 - [ ] Product Target build passes with the locked ESP-IDF tuple.
 - [ ] Product source/component graph excludes the legacy runtime by default.
-- [ ] COM7 log shows automatic start, two clean segments, final stop, and IDLE.
+- [ ] target serial port log shows automatic start, two clean segments, final stop, and IDLE.
 - [ ] Both card pairs pass the read-only recording verifier.
 - [ ] No claim is made for deferred VAD, battery shutdown, power-loss recovery,
   endurance, or wireless behavior.

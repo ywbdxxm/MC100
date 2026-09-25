@@ -1,7 +1,7 @@
 # MC100 Phase 1 PM/VAD spike
 
 This directory is a throwaway measurement harness for the Phase 1 gate. It is
-not part of the product image. The 2026-09-23 COM7 run below is target evidence
+not part of the product image. The 2026-09-23 board run below provides evidence
 for this exact tuple only; it must not be used to claim acoustic quality,
 product VAD selection, or battery current where the corresponding measurement
 is still marked open.
@@ -24,9 +24,9 @@ is still marked open.
 | Gate | Evidence required | Current status |
 | --- | --- | --- |
 | Environment | Clean IDF checkout at the pinned commit; IDF-owned Python, tools, CMake, Ninja, and ESP32-S3 compiler all resolve inside the same installation tuple | **PASS (2026-09-23)** for the target builds listed below: ESP-IDF v6.1, target `esp32s3`, pinned revision |
-| Static/build | Build this project with isolated output directories and the 40/80/APB-lock/DFS defaults | **PASS**; build/flash logs are retained under `firmware/out/com7-phase1/` |
+| Static/build | Build this project with isolated output directories and the 40/80/APB-lock/DFS defaults | **PASS**; build/flash logs were generated in an ignored local output directory |
 | PM/PDM | On the target, capture `PM_CONFIG`, `PM_CLOCK`, `PM_LOCK_STATS`, `PDM_INFO`, progress, and `SPIKE_SUMMARY`; repeat at requested 40 and 80 MHz | **PARTIAL / OPEN**: fixed 80 and DFS ran 10 s (501 frames, zero timeout/error); fixed 40 and fixed 40 + APB lock hang in `i2s_channel_enable()` and trigger Task WDT; DFS active PDM is 80/80 MHz |
-| VAD comparison | Run libfvad and an esp-sr VADNet probe with PSRAM disabled; record init result, internal heap/largest block, per-frame latency (P95), and stack high-water mark | **PARTIAL / OPEN**: esp-sr 2.4.7 + VADNet1 medium **target build PASS**; COM7 runtime reached model discovery but AFE creation **INIT FAIL / BLOCKED** on internal `sr_rb_create` memory exhaustion; libfvad ran on the 80 MHz paths (P95 402/401 µs) |
+| VAD comparison | Run libfvad and an esp-sr VADNet probe with PSRAM disabled; record init result, internal heap/largest block, per-frame latency (P95), and stack high-water mark | **PARTIAL / OPEN**: esp-sr 2.4.7 + VADNet1 medium **target build PASS**; board runtime reached model discovery but AFE creation **INIT FAIL / BLOCKED** on internal `sr_rb_create` memory exhaustion; libfvad ran on the 80 MHz paths (P95 402/401 µs) |
 | Current | Measure battery-side current with a calibrated instrument for the same 40/80 MHz runs, recording setup and sample window | **NOT RUN**; no current measurement is implied by this document |
 | Decision | Select a candidate only after buildability, no-PSRAM operation, resource/latency data, and authorized-corpus recall evidence are recorded | **OPEN**: no VAD candidate selected; authorized corpus and current evidence are missing |
 
@@ -51,9 +51,9 @@ no product `app_main` integration. The target results are recorded separately
 below; repository-only checks by themselves do **not** compile or execute the
 firmware.
 
-## 2026-09-23 COM7 target evidence
+## 2026-09-23 board evidence
 
-Only `COM7` was used for the target runs below. The chip identified as ESP32-S3 QFN56 revision v0.2 with
+One explicitly selected serial port was used for the target runs below. The chip identified as ESP32-S3 QFN56 revision v0.2 with
 8 MB flash and USB Serial/JTAG; an 8 MB flash image was read before the probe.
 The full evidence report is
 [`docs/software/2026-09-23-mc100-pm40-vad-spike.md`](../../../docs/software/2026-09-23-mc100-pm40-vad-spike.md).
@@ -72,7 +72,7 @@ false-start rate, or a successful esp-sr runtime. Keep the Phase 1 decision gate
 explicitly ruled out with the alternatives documented), a fair VAD comparison,
 authorized-corpus metrics, and battery-side current are recorded.
 
-## esp-sr VADNet target-build and COM7 runtime evidence
+## esp-sr VADNet target build and board runtime evidence
 
 An isolated Component Manager throwaway probe resolved `espressif/esp-sr==2.4.7`
 with `VADNet1 medium` enabled for `esp32s3`. The generated configuration has no
@@ -81,10 +81,10 @@ target image build **PASS**ed: model packing reported `vadnet1_medium` at
 281.16 KiB, `mc100_esp_sr_probe.bin` was generated (0x846a0 bytes), and the
 3 MiB app partition retained 83% free. The original log and image artifacts
 were generated under the ignored local
-path `firmware/out/phase1-evidence/`; those artifacts are not retained in this
-checkout.
+path `firmware/out/phase1-evidence/`; those artifacts are not included in the
+repository.
 
-The target image was then flashed and monitored on **COM7 only**. Model
+The target image was flashed and monitored through the selected serial port. Model
 discovery succeeded, but the selected no-PSRAM configuration could not create
 the AFE:
 
@@ -101,7 +101,7 @@ Runtime status is **INIT FAIL / BLOCKED**. The decoded backtrace is
 `afe_create_from_config` → `app_main`; no AFE success, frame latency, stack
 high-water mark, or PDM-fed VAD result was obtained. The runtime log was
 generated under the ignored local path
-`firmware/out/phase1-evidence/`; it is not retained in this checkout.
+`firmware/out/phase1-evidence/`; it is not included in this repository.
 This is a failure of this `vadnet1_medium` / `AFE_MEMORY_ALLOC_MORE_INTERNAL`
 / no-PSRAM tuple, not proof that every esp-sr model or memory strategy is
 impossible. Windows MAX_PATH required a short temporary build path, which does
@@ -123,9 +123,9 @@ python $env:IDF_PATH/tools/idf.py -C firmware/spikes/pm40_vad `
 ```
 
 Repeat with a different output directory and `sdkconfig.defaults` (40 MHz),
-then flash/monitor only under the parent task's explicit COM7 authorization.
+then select the intended device and serial port before flashing or monitoring.
 Record the complete `SPIKE_SUMMARY` line and the instrument log together. Do
-not enumerate ports or change any port other than COM7.
+not enumerate ports or change any other endpoint.
 
 ## Decision hygiene
 

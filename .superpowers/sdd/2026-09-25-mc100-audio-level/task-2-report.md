@@ -53,5 +53,5 @@ counts, invalid arguments with no mutation, and whole-buffer versus chunked stat
 
 ## Scope and concerns
 
-No product capture loop, EVT path, writer, or `F:` files were changed. Target firmware and physical
+No product capture loop, EVT path, writer, or SD-card files were changed. Target firmware and physical
 microphone behavior were not exercised in this host-only task.

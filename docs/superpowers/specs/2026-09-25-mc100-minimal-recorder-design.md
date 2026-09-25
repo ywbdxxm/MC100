@@ -21,7 +21,7 @@ does not redesign the on-card format.
 ## Current context
 
 The EVT USB path has evidence for PDM capture at 80 MHz and SD recording on a
-64 GB exFAT card. The autonomous product path has not completed a COM7
+64 GB exFAT card. The autonomous product path has not completed a target serial port
 `BOOT -> LISTEN -> RECORD -> CLOSE` smoke test. The repository also contains a
 Supervisor, fixed VAD seam, pre-roll buffers, battery policy, upload seam,
 journal/index recovery, and two application entry paths.
@@ -41,7 +41,7 @@ path and a boot-driven recording path without activating those future features.
 - Existing writer rotation at approximately 300 seconds per segment.
 - Normal WAV/index finalization at the 600-second boundary.
 - Bounded handling of microphone, queue, storage, and timeout failures.
-- Host and COM7 validation of the product profile.
+- Host and target serial port validation of the product profile.
 
 ### Deferred
 
@@ -258,7 +258,7 @@ lossless power-fail recovery. A file interrupted by power loss may remain a
   recording.
 - `writer_prepare` may allocate two reserve slots before the first frame. Startup
   logs record the preparation result and elapsed time so a slow card is visible
-  during COM7 validation.
+  during target serial port validation.
 - Do not add a third-party audio container or storage framework.
 - Do not change the ESP-IDF component lock or board pin contract.
 - Keep 64 GB exFAT support because it is part of the existing EVT evidence;
@@ -288,9 +288,9 @@ lossless power-fail recovery. A file interrupted by power loss may remain a
   components for the default recording path.
 - Record image size and internal-RAM queue/task budgets.
 
-### COM7 smoke
+### target serial port smoke
 
-- Use COM7 only.
+- Use target serial port only.
 - Boot with a known 64 GB exFAT card and capture the startup and stop logs.
 - Verify that recording starts without a USB command.
 - Verify two approximately five-minute clean files are present after the
@@ -323,7 +323,7 @@ This phase is complete only when all of the following are true:
    sidecars.
 4. The recorder stops after the session and does not restart automatically.
 5. Host tests cover the duration boundary and queue-full behavior.
-6. COM7 readback verifies the recorded files.
+6. After power-down, a PC card reader and the existing verifier validate both WAV/IDX pairs.
 7. No claim is made for VAD, wireless, battery shutdown, or true power-loss
    recovery.
 
