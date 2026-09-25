@@ -66,7 +66,7 @@ BOOT → PDM/PCM → DC blocking → gain → WAV/IDX writer → configured dura
 
 - 40 MHz PDM 启动实验未通过；DFS 活跃点为 80 MHz。
 - esp-sr VADNet1 medium 当前无 PSRAM runtime 初始化失败；没有完成 VAD 选型。
-- 旧产品版本已通过 COM7 boot → 600 s continuous record → IDLE 串口 smoke；当前默认 20 秒、带 PCM 处理版本需重新执行目标构建、串口 smoke 和 SD 文件 CRC/FINAL 读回。
+- 旧产品版本已通过 COM7 boot → 600 s continuous record → IDLE 串口 smoke；当前默认 20 秒、带 PCM 处理版本的 product 目标构建已通过，仍需执行串口 smoke 和 SD 文件 CRC/FINAL 读回。
 - 真断电恢复仍延期；扇区级故障、多卡、声学、电池和长期耐久均未放行。
 
 ## 6. 保留的安全规则

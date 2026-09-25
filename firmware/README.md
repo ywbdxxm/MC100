@@ -5,7 +5,7 @@
 | Profile | 入口 | 用途 | 实板状态 |
 | --- | --- | --- | --- |
 | `evt` | `main/evt_capture.c` | USB 命令控制的采集和 SD 录音台架 | COM7 单卡通过 |
-| `product` | `main/app_main.c` → `record_loop.c` → PDM/PCM 处理/有界队列/writer | 上电自动录音，默认 20 秒，通常生成一对 WAV/IDX 后进入 IDLE | 旧 600 秒版本曾通过 COM7 串口；新可调时长与增益版本待实板验证 |
+| `product` | `main/app_main.c` → `record_loop.c` → PDM/PCM 处理/有界队列/writer | 上电自动录音，默认 20 秒，通常生成一对 WAV/IDX 后进入 IDLE | product 目标构建已通过；新可调时长与增益版本待 COM7/SD 实板验证 |
 
 无线组件在当前目标构建中排除。软件现状、硬件约束和验证记录分别见[软件说明](../docs/MC100-SOFTWARE.md)、[硬件说明](../docs/MC100-HARDWARE.md)和[验证与状态](../docs/MC100-VALIDATION.md)。
 
